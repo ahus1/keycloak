@@ -63,8 +63,8 @@ importers:
         specifier: ^5.1.6
         version: 5.1.6
       wireit:
-        specifier: ^0.9.5
-        version: 0.9.5
+        specifier: ^0.11.0
+        version: 0.11.0
 
   apps/account-ui:
     dependencies:
@@ -6943,8 +6943,8 @@ packages:
       stackback: 0.0.2
     dev: true
 
-  /wireit@0.9.5:
-    resolution: {integrity: sha512-dKKNAwLxQjbPPMrltPxMUFKvLy2z6hlVjvR/qitvPm8GEQyb/1QYBG7ObvOQLsi95uAXpkWLJXBYkCKeVcMVgA==}
+  /wireit@0.11.0:
+    resolution: {integrity: sha512-s0/bgBZ6y65BfxpCm7YA/x6QokPTQrA4mAN110FCxvvp4MotAupY8f/RH8f6tGfz74zfJafxEqHo/NyoMc0pNQ==}
     engines: {node: '>=14.14.0'}
     hasBin: true
     dependencies:
