@@ -28,7 +28,7 @@
     "@playwright/test": "^1.35.1",
     "@types/lodash-es": "^4.17.7",
     "@types/react": "^18.2.14",
-    "@types/react-dom": "^18.2.6",
+    "@types/react-dom": "^18.2.10",
     "@vitejs/plugin-react-swc": "^3.3.2",
     "@keycloak/keycloak-admin-client": "workspace:*",
     "vite": "^4.4.1",
