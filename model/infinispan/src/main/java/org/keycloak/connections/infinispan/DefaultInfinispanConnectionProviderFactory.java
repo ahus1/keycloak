@@ -39,6 +39,7 @@ import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.cluster.ManagedCacheManagerProvider;
 import org.keycloak.cluster.infinispan.KeycloakHotRodMarshallerFactory;
 import org.keycloak.common.Profile;
+import org.keycloak.health.LoadbalancerCheckCommand;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.cache.infinispan.ClearCacheEvent;
@@ -120,6 +121,8 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
         factory.register((ProviderEvent event) -> {
             if (event instanceof PostMigrationEvent) {
                 KeycloakModelUtils.runJobInTransaction(factory, session -> { registerSystemWideListeners(session); });
+            } else if (event instanceof LoadbalancerCheckCommand) {
+                ((LoadbalancerCheckCommand) event).down();
             }
         });
     }
