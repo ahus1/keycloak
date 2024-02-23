@@ -30,6 +30,7 @@ import org.keycloak.models.utils.KeycloakModelUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 
+import java.util.Comparator;
 import java.util.List;
 import jakarta.persistence.LockModeType;
 
@@ -72,12 +73,25 @@ public class JpaUserCredentialStore implements UserCredentialStore {
     @Override
     public CredentialModel createCredential(RealmModel realm, UserModel user, CredentialModel cred) {
         CredentialEntity entity = createCredentialEntity(realm, user, cred);
+        UserEntity userEntity = userInEntityManagerContext(user.getId());
+        if (userEntity != null) {
+            userEntity.getCredentials().add(entity);
+        }
         return toModel(entity);
+    }
+
+    private UserEntity userInEntityManagerContext(String id) {
+        UserEntity user = em.getReference(UserEntity.class, id);
+        return em.contains(user) ? user : null;
     }
 
     @Override
     public boolean removeStoredCredential(RealmModel realm, UserModel user, String id) {
         CredentialEntity entity = removeCredentialEntity(realm, user, id);
+        UserEntity userEntity = userInEntityManagerContext(user.getId());
+        if (entity != null && userEntity != null) {
+            userEntity.getCredentials().remove(entity);
+        }
         return entity != null;
     }
 
@@ -123,6 +137,13 @@ public class JpaUserCredentialStore implements UserCredentialStore {
 
     @Override
     public Stream<CredentialModel> getStoredCredentialsByTypeStream(RealmModel realm, UserModel user, String type) {
+        UserEntity userEntity = userInEntityManagerContext(user.getId());
+        if (userEntity != null) {
+            // user already in persistence context, no need to execute a query
+            return userEntity.getCredentials().stream().filter(it -> type.equals(it.getType()))
+                    .sorted(Comparator.comparingInt(CredentialEntity::getPriority))
+                    .map(this::toModel);
+        }
         return getStoredCredentialsStream(realm, user).filter(credential -> Objects.equals(type, credential.getType()));
     }
 
