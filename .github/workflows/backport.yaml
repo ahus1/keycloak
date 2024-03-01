@@ -32,6 +32,7 @@ jobs:
     strategy:
       matrix:
         release: ${{ fromJson(needs.backports.outputs.releases) }}
+    continue-on-error: true
     steps:
       - name: ${{ matrix.release }} Backport
         uses: kiegroup/git-backporting@v4.5.0
