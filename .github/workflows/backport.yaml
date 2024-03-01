@@ -1,0 +1,44 @@
+name: Automated Backporting
+
+on:
+  pull_request_target:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  backports:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.checkBackport.outputs.releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - id: checkBackport
+        name: Check Backport
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "PR:         https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER"
+          .github/scripts/pr-check-backport.sh $PR_NUMBER $GITHUB_REPOSITORY
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  backport:
+    needs: backports
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJson(needs.backports.outputs.releases) }}
+    steps:
+      - name: ${{ matrix.release }} Backport
+        uses: kiegroup/git-backporting@vbce5dd4f9969d47da9cbb6ed06abbf87216afc98 # 4.5.1
+        with:
+          target-branch: ${{ matrix.release }}
+          pull-request: ${{ github.event.pull_request.url }}
+          auth: ${{ secrets.GITHUB_TOKEN }}
+          no-squash: true
+
