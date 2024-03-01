@@ -28,6 +28,7 @@ jobs:
 
   backport:
     needs: backports
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         release: ${{ fromJson(needs.backports.outputs.releases) }}

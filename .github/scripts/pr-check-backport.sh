@@ -35,6 +35,6 @@ ISSUES=$(.github/scripts/pr-find-issues.sh "$PR" "$REPO")
 
 for ISSUE in ${ISSUES}; do
   gh api /repos/${REPO}/issues/${ISSUE}/labels | jq '.[] | select( .name | startswith("backport/") ) | .name | . |= sub("backport/"; "release/") ' | \
-     jq '[., inputs]' \
+     jq -c '[., inputs]' \
      >> $GITHUB_OUTPUT
 done
