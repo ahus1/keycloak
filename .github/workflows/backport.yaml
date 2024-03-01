@@ -8,9 +8,11 @@ on:
       - main
 
 jobs:
-  create_backport:
+  backports:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    outputs:
+      releases: ${{ steps.checkBackport.outputs.releases }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,11 +26,16 @@ jobs:
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
-      - if: steps.checkBackport.outputs.backport-22-0 == 'true'
-        name: 22.0.x Backport
+  backport:
+    needs: backports
+    strategy:
+      matrix:
+        release: ${{ fromJson(needs.backports.outputs.releases) }}
+    steps:
+      - name: ${{ matrix.release }} Backport
         uses: kiegroup/git-backporting@v4.5.0
         with:
-          target-branch: release/22.0
+          target-branch: ${{ matrix.release }}
           pull-request: ${{ github.event.pull_request.url }}
           auth: ${{ secrets.GITHUB_TOKEN }}
           no-squash: true

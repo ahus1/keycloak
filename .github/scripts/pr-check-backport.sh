@@ -34,6 +34,7 @@ fi
 ISSUES=$(.github/scripts/pr-find-issues.sh "$PR" "$REPO")
 
 for ISSUE in ${ISSUES}; do
-  gh api /repos/${REPO}/issues/${ISSUE}/labels -q '.[] | select( .name | startswith("backport") ) | .name | . |= split(".") | join("-") | . |= split("/") | join("-") | . + "=true" ' \
+  gh api /repos/${REPO}/issues/${ISSUE}/labels | jq '.[] | select( .name | startswith("backport/") ) | .name | . |= sub("backport/"; "release/") ' | \
+     jq '[., inputs]' \
      >> $GITHUB_OUTPUT
 done
