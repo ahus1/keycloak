@@ -20,7 +20,7 @@ jobs:
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "PR:         https://github.com/$GITHUB_REPOSITORY/pull/$PR_NUMBER"
-          .github/scripts/pr-check-backport.sh $PR_NUMBER
+          .github/scripts/pr-check-backport.sh $PR_NUMBER $GITHUB_REPOSITORY
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
