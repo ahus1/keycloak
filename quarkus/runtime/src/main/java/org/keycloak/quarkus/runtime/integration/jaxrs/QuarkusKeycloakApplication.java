@@ -19,8 +19,11 @@ package org.keycloak.quarkus.runtime.integration.jaxrs;
 
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
+import io.quarkus.vertx.http.ManagementInterface;
 import io.smallrye.common.annotation.Blocking;
 
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.platform.Platform;
 import org.keycloak.quarkus.runtime.integration.QuarkusKeycloakSessionFactory;
@@ -45,6 +48,12 @@ public class QuarkusKeycloakApplication extends KeycloakApplication {
 
     void onShutdownEvent(@Observes ShutdownEvent event) {
         shutdown();
+    }
+
+    public void registerManagementRoutes(@Observes ManagementInterface mi) {
+        mi.router().get("/").handler(rc ->
+            rc.response().putHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN_TYPE.toString()).end("Keycloak Management Interface")
+        );
     }
 
     @Override
