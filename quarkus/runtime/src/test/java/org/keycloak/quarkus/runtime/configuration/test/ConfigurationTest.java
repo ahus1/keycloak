@@ -570,7 +570,7 @@ public class ConfigurationTest {
         assertEquals("secret", secret.getValue());
     }
 
-    private Config.Scope initConfig(String... scope) {
+    protected Config.Scope initConfig(String... scope) {
         Config.init(new MicroProfileConfigProvider(createConfig()));
         return Config.scope(scope);
     }

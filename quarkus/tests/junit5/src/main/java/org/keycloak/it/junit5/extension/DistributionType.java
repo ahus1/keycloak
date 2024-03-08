@@ -33,7 +33,7 @@ public enum DistributionType {
         return new DockerKeycloakDistribution(
                 config.debug(),
                 config.keepAlive(),
-                !DistributionTest.ReInstall.NEVER.equals(config.reInstall()));
+                config.containerExposedPorts());
     }
 
     private static KeycloakDistribution createRawDistribution(DistributionTest config) {

@@ -14,6 +14,15 @@ Options:
                        built a server image using the 'build' command.
 -v, --verbose        Print out error details when running this command.
 
+Config:
+
+--config-keystore <config-keystore>
+                     Specifies a path to the KeyStore Configuration Source.
+--config-keystore-password <config-keystore-password>
+                     Specifies a password to the KeyStore Configuration Source.
+--config-keystore-type <config-keystore-type>
+                     Specifies a type of the KeyStore Configuration Source. Default: PKCS12.
+
 Database:
 
 --db <vendor>        The database vendor. Possible values are: dev-file, dev-mem, mariadb, mssql,
@@ -60,14 +69,11 @@ Feature:
 --features-disabled <feature>
                      Disables a set of one or more features. Possible values are: <...>.
 
-Config:
+Management:
 
---config-keystore <config-keystore>
-                     Specifies a path to the KeyStore Configuration Source.
---config-keystore-password <config-keystore-password>
-                     Specifies a password to the KeyStore Configuration Source.
---config-keystore-type <config-keystore-type>
-                     Specifies a type of the KeyStore Configuration Source. Default: PKCS12.
+--management-enabled <true|false>
+                     If separate interface/port should be used for exposing the management
+                       endpoints Default: false.
 
 Logging:
 

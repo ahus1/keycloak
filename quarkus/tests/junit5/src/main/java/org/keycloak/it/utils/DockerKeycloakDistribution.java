@@ -22,29 +22,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 
 public final class DockerKeycloakDistribution implements KeycloakDistribution {
 
     private static final Logger LOGGER = Logger.getLogger(DockerKeycloakDistribution.class);
 
-    private boolean debug;
-    private boolean manualStop;
+    private final boolean debug;
+    private final boolean manualStop;
+    private final Integer[] exposedPorts;
+
     private int exitCode = -1;
 
     private String stdout = "";
     private String stderr = "";
     private ToStringConsumer backupConsumer = new ToStringConsumer();
-    private File dockerScriptFile = new File("../../container/ubi-null.sh");
+    private final File dockerScriptFile = new File("../../container/ubi-null.sh");
 
     private GenericContainer<?> keycloakContainer = null;
     private String containerId = null;
 
-    private Executor parallelReaperExecutor = Executors.newSingleThreadExecutor();
-    private Map<String, String> envVars = new HashMap<>();
+    private final Executor parallelReaperExecutor = Executors.newSingleThreadExecutor();
+    private final Map<String, String> envVars = new HashMap<>();
 
-    public DockerKeycloakDistribution(boolean debug, boolean manualStop, boolean reCreate) {
+    public DockerKeycloakDistribution(boolean debug, boolean manualStop, int[] exposedPorts) {
         this.debug = debug;
         this.manualStop = manualStop;
+        this.exposedPorts = IntStream.of(exposedPorts).boxed().toArray(Integer[]::new);
     }
 
     @Override
@@ -79,7 +83,7 @@ public final class DockerKeycloakDistribution implements KeycloakDistribution {
 
         return new GenericContainer(image)
                 .withEnv(envVars)
-                .withExposedPorts(8080)
+                .withExposedPorts(exposedPorts)
                 .withStartupAttempts(1)
                 .withStartupTimeout(Duration.ofSeconds(120))
                 .waitingFor(Wait.forListeningPort());

@@ -26,6 +26,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.DatabaseSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.ManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TransactionsSpec;
 import org.keycloak.operator.crds.v2alpha1.realmimport.KeycloakRealmImport;
 import org.keycloak.operator.testsuite.utils.K8sUtils;
@@ -44,6 +45,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CRSerializationTest {
 
@@ -89,6 +91,14 @@ public class CRSerializationTest {
         assertEquals("usernameSecretKey", databaseSpec.getUsernameSecret().getKey());
         assertEquals("passwordSecret", databaseSpec.getPasswordSecret().getName());
         assertEquals("passwordSecretKey", databaseSpec.getPasswordSecret().getKey());
+
+        ManagementSpec managementSpec = keycloak.getSpec().getManagementSpec();
+        assertNotNull(managementSpec);
+        assertTrue(managementSpec.isEnabled());
+        assertEquals("/management", managementSpec.getRelativePath());
+        assertEquals("127.0.0.1", managementSpec.getHost());
+        assertEquals(9003, managementSpec.getPort());
+        assertTrue(managementSpec.getHttpsEnabled());
     }
 
     @Test

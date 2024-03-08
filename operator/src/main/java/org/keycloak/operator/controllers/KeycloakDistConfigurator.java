@@ -32,6 +32,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.spec.DatabaseSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.ManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.ProxySpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TransactionsSpec;
 
@@ -70,6 +71,7 @@ public class KeycloakDistConfigurator {
         configureDatabase();
         configureCache();
         configureProxy();
+        configureManagement();
     }
 
     /**
@@ -135,6 +137,15 @@ public class KeycloakDistConfigurator {
     void configureProxy() {
         optionMapper(keycloakCR -> keycloakCR.getSpec().getProxySpec())
                 .mapOption("proxy-headers", ProxySpec::getHeaders);
+    }
+
+    void configureManagement() {
+        optionMapper(keycloakCR -> keycloakCR.getSpec().getManagementSpec())
+                .mapOption("management-enabled", ManagementSpec::isEnabled)
+                .mapOption("management-relative-path", ManagementSpec::getRelativePath)
+                .mapOption("management-port", ManagementSpec::getPort)
+                .mapOption("management-host", ManagementSpec::getHost)
+                .mapOption("management-https-enabled", ManagementSpec::getHttpsEnabled);
     }
 
     /* ---------- END of configuration of first-class citizen fields ---------- */

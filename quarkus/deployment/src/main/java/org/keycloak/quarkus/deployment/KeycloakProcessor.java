@@ -924,6 +924,10 @@ class KeycloakProcessor {
         return Configuration.isTrue(HealthOptions.HEALTH_ENABLED);
     }
 
+    private boolean isManagementEnabled() {
+        return Configuration.getOptionalBooleanValue(NS_KEYCLOAK_PREFIX.concat("management-enabled")).orElse(false);
+    }
+
     static JdbcDataSourceBuildItem getDefaultDataSource(List<JdbcDataSourceBuildItem> jdbcDataSources) {
         for (JdbcDataSourceBuildItem jdbcDataSource : jdbcDataSources) {
             if (jdbcDataSource.isDefault()) {

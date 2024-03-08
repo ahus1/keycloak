@@ -81,6 +81,12 @@ Health:
                        are available at the '/health', '/health/ready' and '/health/live'
                        endpoints. Default: false.
 
+Management:
+
+--management-enabled <true|false>
+                     If separate interface/port should be used for exposing the management
+                       endpoints Default: false.
+
 Metrics:
 
 --metrics-enabled <true|false>

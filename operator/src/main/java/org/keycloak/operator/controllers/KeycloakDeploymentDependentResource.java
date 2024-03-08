@@ -22,11 +22,15 @@ import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.EnvVarSource;
 import io.fabric8.kubernetes.api.model.EnvVarSourceBuilder;
-import io.fabric8.kubernetes.api.model.PodResourceClaim;
+import io.fabric8.kubernetes.api.model.HTTPGetAction;
+import io.fabric8.kubernetes.api.model.HTTPGetActionBuilder;
+import io.fabric8.kubernetes.api.model.HTTPGetActionFluent;
+import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.PodSpec;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretKeySelector;
+import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
@@ -37,7 +41,7 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
 import io.quarkus.logging.Log;
-
+import jakarta.inject.Inject;
 import org.keycloak.operator.Config;
 import org.keycloak.operator.Constants;
 import org.keycloak.operator.Utils;
@@ -45,6 +49,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
 import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.CacheSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.ManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.Truststore;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TruststoreSource;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
@@ -64,8 +69,6 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import jakarta.inject.Inject;
 
 import static org.keycloak.operator.Utils.addResources;
 import static org.keycloak.operator.controllers.KeycloakDistConfigurator.getKeycloakOptionEnvVarName;
@@ -293,42 +296,51 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
                 .map(path -> !path.endsWith("/") ? path + "/" : path)
                 .orElse("/");
 
+        var managementSpec = Optional.ofNullable(keycloakCR.getSpec()).map(KeycloakSpec::getManagementSpec);
+        var isManagementEnabled = managementSpec.map(ManagementSpec::isEnabled).orElse(false);
+
         if (!containerBuilder.hasReadinessProbe()) {
+            var commonPath = "health/ready";
+            var readinessProbe = isManagementEnabled ?
+                    getProbeActionManagement(managementSpec.get(), commonPath) :
+                    getProbeAction(null, kcPort, kcRelativePath + commonPath, protocol);
+
             containerBuilder.withNewReadinessProbe()
                 .withPeriodSeconds(10)
                 .withFailureThreshold(3)
-                .withNewHttpGet()
-                .withScheme(protocol)
-                .withNewPort(kcPort)
-                .withPath(kcRelativePath + "health/ready")
+                .withNewHttpGetLike(readinessProbe)
                 .endHttpGet()
                 .endReadinessProbe();
         }
         if (!containerBuilder.hasLivenessProbe()) {
+            var commonPath = "health/live";
+            var livenessProbe = isManagementEnabled ?
+                    getProbeActionManagement(managementSpec.get(), commonPath) :
+                    getProbeAction(null, kcPort, kcRelativePath + commonPath, protocol);
+
             containerBuilder.withNewLivenessProbe()
                 .withPeriodSeconds(10)
                 .withFailureThreshold(3)
-                .withNewHttpGet()
-                .withScheme(protocol)
-                .withNewPort(kcPort)
-                .withPath(kcRelativePath + "health/live")
+                .withNewHttpGetLike(livenessProbe)
                 .endHttpGet()
                 .endLivenessProbe();
         }
         if (!containerBuilder.hasStartupProbe()) {
+            var commonPath = "health/started";
+            var startupProbe = isManagementEnabled ?
+                    getProbeActionManagement(managementSpec.get(), commonPath) :
+                    getProbeAction(null, kcPort, kcRelativePath + commonPath, protocol);
+
             containerBuilder.withNewStartupProbe()
                 .withPeriodSeconds(1)
                 .withFailureThreshold(600)
-                .withNewHttpGet()
-                .withScheme(protocol)
-                .withNewPort(kcPort)
-                .withPath(kcRelativePath + "health/started")
+                .withNewHttpGetLike(startupProbe)
                 .endHttpGet()
                 .endStartupProbe();
         }
 
         // add in ports - there's no merging being done here
-        StatefulSet baseDeployment = containerBuilder
+        containerBuilder
             .addNewPort()
                 .withName(Constants.KEYCLOAK_HTTPS_PORT_NAME)
                 .withContainerPort(Constants.KEYCLOAK_HTTPS_PORT)
@@ -338,10 +350,35 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
                 .withName(Constants.KEYCLOAK_HTTP_PORT_NAME)
                 .withContainerPort(Constants.KEYCLOAK_HTTP_PORT)
                 .withProtocol(Constants.KEYCLOAK_SERVICE_PROTOCOL)
-            .endPort()
-            .endContainer().endSpec().endTemplate().endSpec().build();
+            .endPort();
 
-        return baseDeployment;
+        if (isManagementEnabled) {
+            containerBuilder
+                .addNewPort()
+                    .withName(Constants.KEYCLOAK_MANAGEMENT_PORT_NAME)
+                    .withContainerPort(Constants.KEYCLOAK_MANAGEMENT_PORT)
+                    .withProtocol(Constants.KEYCLOAK_SERVICE_PROTOCOL)
+                .endPort();
+        }
+
+        // base deployment
+        return containerBuilder.endContainer().endSpec().endTemplate().endSpec().build();
+    }
+
+    private static HTTPGetAction getProbeActionManagement(ManagementSpec spec, String relativePath) {
+        if (spec == null || !spec.isEnabled()) return null;
+        return getProbeAction(spec.getHost(), spec.getPort(), spec.getRelativePath() + "/" + relativePath, spec.getHttpsEnabled() ? "HTTPS" : "HTTP");
+    }
+
+    private static HTTPGetAction getProbeAction(String host, Integer port, String path, String scheme) {
+        var builder = new HTTPGetActionBuilder(new HTTPGetActionFluent<>()
+                .withPort(new IntOrString(port))
+                .withPath(path)
+                .withScheme(scheme));
+        if (host != null) {
+            builder.withHost(host);
+        }
+        return builder.build();
     }
 
     private static String getJGroupsParameter(Keycloak keycloakCR) {

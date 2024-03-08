@@ -144,6 +144,19 @@ public class KeycloakDistConfiguratorTest {
         testFirstClassCitizen(expectedValues);
     }
 
+    @Test
+    public void management() {
+        final Map<String, String> expectedValues = new HashMap<>(Map.of(
+                "management-enabled", "true",
+                "management-relative-path", "/management",
+                "management-port", "9003",
+                "management-host", "127.0.0.1",
+                "management-https-enabled", "true"
+        ));
+
+        testFirstClassCitizen(expectedValues);
+    }
+
     /* UTILS */
 
     private void testFirstClassCitizen(Map<String, String> expectedValues) {

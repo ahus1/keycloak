@@ -65,6 +65,12 @@ spec:
       memory: "1500M"
   proxy:
     headers: forwarded
+  management:
+    enabled: true
+    relativePath: /management
+    port: 9003
+    host: 127.0.0.1
+    httpsEnabled: true
   unsupported:
     podTemplate:
       metadata:

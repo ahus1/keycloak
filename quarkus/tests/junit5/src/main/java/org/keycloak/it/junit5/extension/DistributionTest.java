@@ -61,5 +61,10 @@ public @interface DistributionTest {
      * If any option must be set when starting the server.
      */
     String[] defaultOptions() default {};
+
+    /**
+     * Exposed ports when container is used
+     */
+    int[] containerExposedPorts() default {8080};
 }
 

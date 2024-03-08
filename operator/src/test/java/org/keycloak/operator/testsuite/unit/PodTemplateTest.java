@@ -19,6 +19,7 @@ package org.keycloak.operator.testsuite.unit;
 
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.EnvVar;
+import io.fabric8.kubernetes.api.model.HTTPGetAction;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.PodTemplateSpecBuilder;
@@ -30,7 +31,8 @@ import io.fabric8.kubernetes.api.model.apps.StatefulSetBuilder;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-
+import jakarta.inject.Inject;
+import org.apache.commons.lang3.function.TriConsumer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.keycloak.operator.Constants;
@@ -43,6 +45,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakSpecBuilder;
 import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpecBuilder;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpecBuilder;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.ManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
 import org.mockito.Mockito;
 
@@ -50,8 +53,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import jakarta.inject.Inject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -460,6 +461,32 @@ public class PodTemplateTest {
         } finally {
             this.deployment.setUseServiceCaCrt(false);
         }
+    }
+
+    @Test
+    public void testManagementHealthProbes() {
+        final Function<Consumer<ManagementSpec>, Container> deployment = (mgmtSpec) -> getDeployment(null, new StatefulSet(),
+                spec -> mgmtSpec.accept(spec.buildManagementSpec()))
+                .getSpec()
+                .getTemplate()
+                .getSpec()
+                .getContainers()
+                .get(0);
+
+        final TriConsumer<HTTPGetAction, String, Integer> assertDefaults = (get, path, port) -> {
+            assertEquals(path, get.getPath());
+            assertEquals(port, get.getPort().getIntVal());
+        };
+
+        var defaultTurnedOn = deployment.apply(mgmt -> mgmt.setEnabled(true));
+        assertDefaults.accept(defaultTurnedOn.getReadinessProbe().getHttpGet(), "/health/ready", Constants.KEYCLOAK_MANAGEMENT_PORT);
+        assertDefaults.accept(defaultTurnedOn.getLivenessProbe().getHttpGet(), "/health/live", Constants.KEYCLOAK_MANAGEMENT_PORT);
+        assertDefaults.accept(defaultTurnedOn.getStartupProbe().getHttpGet(), "/health/start", Constants.KEYCLOAK_MANAGEMENT_PORT);
+
+        var defaultTurnedOff = deployment.apply(mgmt -> mgmt.setEnabled(false));
+        assertDefaults.accept(defaultTurnedOn.getReadinessProbe().getHttpGet(), "/health/ready", Constants.KEYCLOAK_HTTP_PORT);
+        assertDefaults.accept(defaultTurnedOn.getLivenessProbe().getHttpGet(), "/health/live", Constants.KEYCLOAK_HTTP_PORT);
+        assertDefaults.accept(defaultTurnedOn.getStartupProbe().getHttpGet(), "/health/start", Constants.KEYCLOAK_HTTP_PORT);
     }
 
 }
