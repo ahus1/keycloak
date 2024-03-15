@@ -1,4 +1,4 @@
-name: Automated Backporting
+name: Automated Backporting via Dispatch
 
 on:
   workflow_dispatch:
