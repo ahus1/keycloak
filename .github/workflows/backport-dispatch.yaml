@@ -27,7 +27,7 @@ jobs:
         uses: kiegroup/git-backporting@bce5dd4f9969d47da9cbb6ed06abbf87216afc98 # 4.5.1
         with:
           target-branch: release/${{ inputs.targetBranch }}
-          pull-request: https://github.com/{{ github.repository }}/pulls/${{ inputs.pullRequest }}
+          pull-request: https://github.com/${{ github.repository }}/pulls/${{ inputs.pullRequest }}
           auth: ${{ secrets.GITHUB_TOKEN }}
           dry-run: ${{ inputs.dryRun }}
           bp-branch-name: backport/pr-${{ inputs.pullRequest }}-${{ inputs.targetBranch }}
