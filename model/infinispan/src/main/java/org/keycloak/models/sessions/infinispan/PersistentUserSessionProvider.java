@@ -201,12 +201,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
 
     @Override
     public AuthenticatedClientSessionModel createClientSession(RealmModel realm, ClientModel client, UserSessionModel userSession) {
-        final UUID clientSessionId;
-        if (userSession.isOffline()) {
-            clientSessionId = keyGenerator.generateKeyUUID(session, clientSessionCache);
-        } else {
-            clientSessionId = PersistentUserSessionProvider.createClientSessionUUID(userSession.getId(), client.getId());
-        }
+        final UUID clientSessionId = PersistentUserSessionProvider.createClientSessionUUID(userSession.getId(), client.getId());
         AuthenticatedClientSessionEntity entity = new AuthenticatedClientSessionEntity(clientSessionId);
         entity.setRealmId(realm.getId());
         entity.setClientId(client.getId());
@@ -792,7 +787,6 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
         return getUserSessionsStream(realm, client, first, max, true);
     }
 
-
     @Override
     public void importUserSessions(Collection<UserSessionModel> persistentUserSessions, boolean offline) {
         if (persistentUserSessions == null || persistentUserSessions.isEmpty()) {
@@ -1025,12 +1019,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
 
     private AuthenticatedClientSessionEntity createAuthenticatedClientSessionInstance(String userSessionId, AuthenticatedClientSessionModel clientSession,
                                                                                       String realmId, String clientId, boolean offline) {
-        final UUID clientSessionId;
-        if (offline) {
-            clientSessionId = keyGenerator.generateKeyUUID(session, clientSessionCache);
-        } else {
-            clientSessionId = PersistentUserSessionProvider.createClientSessionUUID(userSessionId, clientId);
-        }
+        final UUID clientSessionId = PersistentUserSessionProvider.createClientSessionUUID(userSessionId, clientId);
         AuthenticatedClientSessionEntity entity = new AuthenticatedClientSessionEntity(clientSessionId);
         entity.setRealmId(realmId);
 
@@ -1079,7 +1068,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
             clientSessionUpdateTx.addTask(clientSession.getId(), null, clientSession, UserSessionModel.SessionPersistenceState.PERSISTENT);
         }
 
-        return sessionTx.get(realm, userSessionEntity.getId());
+        return userSessionUpdateTx.get(userSessionEntity.getId());
 
     }
 
@@ -1123,6 +1112,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
     }
 
     public static UUID createClientSessionUUID(String userSessionId, String clientId) {
+        // This allows creating a UUID that is constant even if the entry is reloaded from the database
         return UUID.nameUUIDFromBytes((userSessionId + clientId).getBytes(StandardCharsets.UTF_8));
     }
 }
