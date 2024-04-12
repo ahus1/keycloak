@@ -86,6 +86,7 @@ public class CacheTest extends BaseOperatorTest {
         k8sclient.configMaps()
                 .resource(new ConfigMapBuilder().withNewMetadata().withName(CONFIGMAP_NAME).endMetadata()
                         .addToData("file",
+                                // language=XML
                                 """
                                         <infinispan
                                                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -96,7 +97,7 @@ public class CacheTest extends BaseOperatorTest {
                                                 <local-cache name="default">
                                                     <transaction transaction-manager-lookup="org.infinispan.transaction.lookup.JBossStandaloneJTAManagerLookup"/>
                                                 </local-cache>
-                                            </cache-contianer>
+                                            </cache-container>
                                         </infinispan>""")
                         .build())
                 .create();
