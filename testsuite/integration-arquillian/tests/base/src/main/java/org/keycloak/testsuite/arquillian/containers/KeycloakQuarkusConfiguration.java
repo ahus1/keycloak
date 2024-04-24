@@ -50,6 +50,8 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
 
     private String defaultFeatures;
 
+    private boolean remoteCaches = Boolean.getBoolean("auth.server.remote-cache.enabled");
+
     @Override
     public void validate() throws ConfigurationException {
         int basePort = getBindHttpPort();
@@ -247,5 +249,9 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
 
     public String getDefaultFeatures() {
         return defaultFeatures;
+    }
+
+    public boolean isRemoteCaches() {
+        return remoteCaches;
     }
 }

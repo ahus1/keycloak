@@ -207,6 +207,15 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         addStorageOptions(storeProvider, commands);
         addFeaturesOption(commands);
 
+        if (configuration.isRemoteCaches()) {
+            commands.add("--cache-remote-host=localhost");
+            commands.add("--cache-remote-username=keycloak");
+            commands.add("--cache-remote-password=Password1!");
+            commands.add("--cache-remote-tls-enabled=false");
+            commands.add("--spi-connections-infinispan-quarkus-site-name=test");
+            configuration.appendJavaOpts("-Dkc.cache-remote-create-caches=true");
+        }
+
         return commands;
     }
 

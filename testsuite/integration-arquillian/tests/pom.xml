@@ -688,6 +688,9 @@
                               ~ See KEYCLOAK-15692, ELY-1891 issues & PRs of EAP7-1219 issue for details.
                               -->
                             <wildfly-client.config.path>${project.build.directory}${file.separator}dependency${file.separator}wildfly-config.xml</wildfly-client.config.path>
+
+                            <!-- remote only caches -->
+                            <auth.server.remote-cache.enabled>false</auth.server.remote-cache.enabled>
                         </systemPropertyVariables>
                         <properties>
                             <property>
