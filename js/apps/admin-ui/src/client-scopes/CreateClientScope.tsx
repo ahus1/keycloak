@@ -2,23 +2,22 @@ import { AlertVariant, PageSection } from "@patternfly/react-core";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
 import {
-  changeScope,
   ClientScopeDefaultOptionalType,
+  changeScope,
 } from "../components/client-scope/ClientScopeTypes";
 import { ViewHeader } from "../components/view-header/ViewHeader";
-import { useAdminClient } from "../context/auth/AdminClient";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { convertFormValuesToObject } from "../util";
 import { ScopeForm } from "./details/ScopeForm";
 import { toClientScope } from "./routes/ClientScope";
 
 export default function CreateClientScope() {
-  const { t } = useTranslation("client-scopes");
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { realm } = useRealm();
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const onSubmit = async (formData: ClientScopeDefaultOptionalType) => {
@@ -35,32 +34,28 @@ export default function CreateClientScope() {
       });
 
       if (!scope) {
-        throw new Error(t("common:notFound"));
+        throw new Error(t("notFound"));
       }
 
-      await changeScope(
-        adminClient,
-        { ...clientScope, id: scope.id },
-        clientScope.type
-      );
+      await changeScope({ ...clientScope, id: scope.id }, clientScope.type);
 
-      addAlert(t("createSuccess", AlertVariant.success));
+      addAlert(t("createClientScopeSuccess", AlertVariant.success));
 
       navigate(
         toClientScope({
           realm,
           id: scope.id!,
           tab: "settings",
-        })
+        }),
       );
     } catch (error) {
-      addError("client-scopes:createError", error);
+      addError("createClientScopeError", error);
     }
   };
 
   return (
     <>
-      <ViewHeader titleKey="client-scopes:createClientScope" />
+      <ViewHeader titleKey="createClientScope" />
       <PageSection variant="light" className="pf-u-p-0">
         <PageSection variant="light">
           <ScopeForm save={onSubmit} />

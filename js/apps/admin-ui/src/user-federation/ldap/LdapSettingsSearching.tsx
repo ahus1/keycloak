@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   FormGroup,
   Select,
@@ -10,7 +9,7 @@ import { useState } from "react";
 import { Controller, UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { FormAccess } from "../../components/form-access/FormAccess";
+import { FormAccess } from "../../components/form/FormAccess";
 import { HelpItem } from "ui-shared";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { WizardSectionHeader } from "../../components/wizard-section-header/WizardSectionHeader";
@@ -26,19 +25,19 @@ export const LdapSettingsSearching = ({
   showSectionHeading = false,
   showSectionDescription = false,
 }: LdapSettingsSearchingProps) => {
-  const { t } = useTranslation("user-federation");
-  const { t: helpText } = useTranslation("user-federation-help");
+  const { t } = useTranslation();
 
   const [isSearchScopeDropdownOpen, setIsSearchScopeDropdownOpen] =
     useState(false);
   const [isEditModeDropdownOpen, setIsEditModeDropdownOpen] = useState(false);
+  const [isReferralDropdownOpen, setIsReferralDropdownOpen] = useState(false);
 
   return (
     <>
       {showSectionHeading && (
         <WizardSectionHeader
           title={t("ldapSearchingAndUpdatingSettings")}
-          description={helpText("ldapSearchingAndUpdatingSettingsDescription")}
+          description={t("ldapSearchingAndUpdatingSettingsDescription")}
           showDescription={showSectionDescription}
         />
       )}
@@ -48,17 +47,19 @@ export const LdapSettingsSearching = ({
           label={t("editMode")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:editModeLdapHelp")}
-              fieldLabelId="user-federation:editMode"
+              helpText={t("editModeLdapHelp")}
+              fieldLabelId="editMode"
             />
           }
           fieldId="kc-edit-mode"
           isRequired
           validated={
-            form.formState.errors.config?.editMode?.[0] ? "error" : "default"
+            (form.formState.errors.config as any)?.editMode?.[0]
+              ? "error"
+              : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.editMode?.[0].message
+            (form.formState.errors.config as any)?.editMode?.[0].message
           }
         >
           <Controller
@@ -82,16 +83,30 @@ export const LdapSettingsSearching = ({
                 }}
                 selections={field.value}
                 variant={SelectVariant.single}
+                aria-label={t("selectEditMode")}
                 validated={
-                  form.formState.errors.config?.editMode?.[0]
+                  (form.formState.errors.config as any)?.editMode?.[0]
                     ? "error"
                     : "default"
                 }
               >
-                <SelectOption value="" isPlaceholder />
-                <SelectOption value="READ_ONLY" />
-                <SelectOption value="WRITABLE" />
-                <SelectOption value="UNSYNCED" />
+                <SelectOption
+                  aria-label={t("emptySelection")}
+                  value=""
+                  isPlaceholder
+                />
+                <SelectOption
+                  aria-label={t("readOnlySelection")}
+                  value="READ_ONLY"
+                />
+                <SelectOption
+                  aria-label={t("writableSelection")}
+                  value="WRITABLE"
+                />
+                <SelectOption
+                  aria-label={t("unsyncedSelection")}
+                  value="UNSYNCED"
+                />
               </Select>
             )}
           />
@@ -99,17 +114,18 @@ export const LdapSettingsSearching = ({
         <FormGroup
           label={t("usersDN")}
           labelIcon={
-            <HelpItem
-              helpText={t("user-federation-help:usersDNHelp")}
-              fieldLabelId="user-federation:usersDn"
-            />
+            <HelpItem helpText={t("usersDNHelp")} fieldLabelId="usersDn" />
           }
           fieldId="kc-ui-users-dn"
           isRequired
           validated={
-            form.formState.errors.config?.usersDn?.[0] ? "error" : "default"
+            (form.formState.errors.config as any)?.usersDn?.[0]
+              ? "error"
+              : "default"
           }
-          helperTextInvalid={form.formState.errors.config?.usersDn?.[0].message}
+          helperTextInvalid={
+            (form.formState.errors.config as any)?.usersDn?.[0].message
+          }
         >
           <KeycloakTextInput
             isRequired
@@ -117,7 +133,9 @@ export const LdapSettingsSearching = ({
             id="kc-ui-users-dn"
             data-testid="ldap-users-dn"
             validated={
-              form.formState.errors.config?.usersDn?.[0] ? "error" : "default"
+              (form.formState.errors.config as any)?.usersDn?.[0]
+                ? "error"
+                : "default"
             }
             {...form.register("config.usersDn.0", {
               required: {
@@ -131,19 +149,20 @@ export const LdapSettingsSearching = ({
           label={t("usernameLdapAttribute")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:usernameLdapAttributeHelp")}
-              fieldLabelId="user-federation:usernameLdapAttribute"
+              helpText={t("usernameLdapAttributeHelp")}
+              fieldLabelId="usernameLdapAttribute"
             />
           }
           fieldId="kc-username-ldap-attribute"
           isRequired
           validated={
-            form.formState.errors.config?.usernameLDAPAttribute?.[0]
+            (form.formState.errors.config as any)?.usernameLDAPAttribute?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.usernameLDAPAttribute?.[0].message
+            (form.formState.errors.config as any)?.usernameLDAPAttribute?.[0]
+              .message
           }
         >
           <KeycloakTextInput
@@ -152,7 +171,7 @@ export const LdapSettingsSearching = ({
             id="kc-username-ldap-attribute"
             data-testid="ldap-username-attribute"
             validated={
-              form.formState.errors.config?.usernameLDAPAttribute?.[0]
+              (form.formState.errors.config as any)?.usernameLDAPAttribute?.[0]
                 ? "error"
                 : "default"
             }
@@ -168,19 +187,19 @@ export const LdapSettingsSearching = ({
           label={t("rdnLdapAttribute")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:rdnLdapAttributeHelp")}
-              fieldLabelId="user-federation:rdnLdapAttribute"
+              helpText={t("rdnLdapAttributeHelp")}
+              fieldLabelId="rdnLdapAttribute"
             />
           }
           fieldId="kc-rdn-ldap-attribute"
           isRequired
           validated={
-            form.formState.errors.config?.rdnLDAPAttribute?.[0]
+            (form.formState.errors.config as any)?.rdnLDAPAttribute?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.rdnLDAPAttribute?.[0].message
+            (form.formState.errors.config as any)?.rdnLDAPAttribute?.[0].message
           }
         >
           <KeycloakTextInput
@@ -189,7 +208,7 @@ export const LdapSettingsSearching = ({
             id="kc-rdn-ldap-attribute"
             data-testid="ldap-rdn-attribute"
             validated={
-              form.formState.errors.config?.rdnLDAPAttribute?.[0]
+              (form.formState.errors.config as any)?.rdnLDAPAttribute?.[0]
                 ? "error"
                 : "default"
             }
@@ -205,19 +224,20 @@ export const LdapSettingsSearching = ({
           label={t("uuidLdapAttribute")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:uuidLdapAttributeHelp")}
-              fieldLabelId="user-federation:uuidLdapAttribute"
+              helpText={t("uuidLdapAttributeHelp")}
+              fieldLabelId="uuidLdapAttribute"
             />
           }
           fieldId="kc-uuid-ldap-attribute"
           isRequired
           validated={
-            form.formState.errors.config?.uuidLDAPAttribute?.[0]
+            (form.formState.errors.config as any)?.uuidLDAPAttribute?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.uuidLDAPAttribute?.[0].message
+            (form.formState.errors.config as any)?.uuidLDAPAttribute?.[0]
+              .message
           }
         >
           <KeycloakTextInput
@@ -226,7 +246,7 @@ export const LdapSettingsSearching = ({
             id="kc-uuid-ldap-attribute"
             data-testid="ldap-uuid-attribute"
             validated={
-              form.formState.errors.config?.uuidLDAPAttribute?.[0]
+              (form.formState.errors.config as any)?.uuidLDAPAttribute?.[0]
                 ? "error"
                 : "default"
             }
@@ -242,19 +262,20 @@ export const LdapSettingsSearching = ({
           label={t("userObjectClasses")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:userObjectClassesHelp")}
-              fieldLabelId="user-federation:userObjectClasses"
+              helpText={t("userObjectClassesHelp")}
+              fieldLabelId="userObjectClasses"
             />
           }
           fieldId="kc-user-object-classes"
           isRequired
           validated={
-            form.formState.errors.config?.userObjectClasses?.[0]
+            (form.formState.errors.config as any)?.userObjectClasses?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.userObjectClasses?.[0].message
+            (form.formState.errors.config as any)?.userObjectClasses?.[0]
+              .message
           }
         >
           <KeycloakTextInput
@@ -263,7 +284,7 @@ export const LdapSettingsSearching = ({
             id="kc-user-object-classes"
             data-testid="ldap-user-object-classes"
             validated={
-              form.formState.errors.config?.userObjectClasses?.[0]
+              (form.formState.errors.config as any)?.userObjectClasses?.[0]
                 ? "error"
                 : "default"
             }
@@ -279,25 +300,26 @@ export const LdapSettingsSearching = ({
           label={t("userLdapFilter")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:userLdapFilterHelp")}
-              fieldLabelId="user-federation:userLdapFilter"
+              helpText={t("userLdapFilterHelp")}
+              fieldLabelId="userLdapFilter"
             />
           }
           fieldId="kc-user-ldap-filter"
           validated={
-            form.formState.errors.config?.customUserSearchFilter?.[0]
+            (form.formState.errors.config as any)?.customUserSearchFilter?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.customUserSearchFilter?.[0].message
+            (form.formState.errors.config as any)?.customUserSearchFilter?.[0]
+              .message
           }
         >
           <KeycloakTextInput
             id="kc-user-ldap-filter"
             data-testid="user-ldap-filter"
             validated={
-              form.formState.errors.config?.customUserSearchFilter?.[0]
+              (form.formState.errors.config as any)?.customUserSearchFilter?.[0]
                 ? "error"
                 : "default"
             }
@@ -314,8 +336,8 @@ export const LdapSettingsSearching = ({
           label={t("searchScope")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:searchScopeHelp")}
-              fieldLabelId="user-federation:searchScope"
+              helpText={t("searchScopeHelp")}
+              fieldLabelId="searchScope"
             />
           }
           fieldId="kc-search-scope"
@@ -353,8 +375,8 @@ export const LdapSettingsSearching = ({
           label={t("readTimeout")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:readTimeoutHelp")}
-              fieldLabelId="user-federation:readTimeout"
+              helpText={t("readTimeoutHelp")}
+              fieldLabelId="readTimeout"
             />
           }
           fieldId="kc-read-timeout"
@@ -371,8 +393,8 @@ export const LdapSettingsSearching = ({
           label={t("pagination")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:paginationHelp")}
-              fieldLabelId="user-federation:pagination"
+              helpText={t("paginationHelp")}
+              fieldLabelId="pagination"
             />
           }
           fieldId="kc-ui-pagination"
@@ -389,10 +411,41 @@ export const LdapSettingsSearching = ({
                 isDisabled={false}
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("pagination")}
               />
+            )}
+          ></Controller>
+        </FormGroup>
+        <FormGroup
+          label={t("referral")}
+          labelIcon={
+            <HelpItem helpText={t("referralHelp")} fieldLabelId="referral" />
+          }
+          fieldId="kc-referral"
+        >
+          <Controller
+            name="config.referral.0"
+            defaultValue=""
+            control={form.control}
+            render={({ field }) => (
+              <Select
+                toggleId="kc-referral"
+                onToggle={() =>
+                  setIsReferralDropdownOpen(!isReferralDropdownOpen)
+                }
+                isOpen={isReferralDropdownOpen}
+                onSelect={(_, value) => {
+                  field.onChange(value as string);
+                  setIsReferralDropdownOpen(false);
+                }}
+                selections={field.value}
+                variant={SelectVariant.single}
+              >
+                <SelectOption value="ignore" isPlaceholder />
+                <SelectOption value="follow" />
+              </Select>
             )}
           ></Controller>
         </FormGroup>

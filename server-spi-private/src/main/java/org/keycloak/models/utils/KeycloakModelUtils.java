@@ -36,7 +36,9 @@ import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.ClientSecretConstants;
 import org.keycloak.models.Constants;
 import org.keycloak.models.GroupModel;
+import org.keycloak.models.GroupProvider;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.KeycloakSessionTask;
@@ -51,22 +53,20 @@ import org.keycloak.representations.idm.CertificateRepresentation;
 import org.keycloak.transaction.JtaTransactionManagerLookup;
 
 import javax.crypto.spec.SecretKeySpec;
-import javax.transaction.InvalidTransactionException;
-import javax.transaction.SystemException;
-import javax.transaction.Transaction;
+import jakarta.transaction.InvalidTransactionException;
+import jakarta.transaction.SystemException;
+import jakarta.transaction.Transaction;
 
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
-import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -75,6 +75,8 @@ import java.util.stream.Stream;
 import org.keycloak.models.AccountRoles;
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderFactory;
+import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -250,22 +252,133 @@ public final class KeycloakModelUtils {
 
     /**
      * Wrap given runnable job into KeycloakTransaction.
+     * @param factory The session factory to use
+     * @param task The task to execute
      */
     public static void runJobInTransaction(KeycloakSessionFactory factory, KeycloakSessionTask task) {
-        runJobInTransactionWithResult(factory, session -> {
+        runJobInTransactionWithResult(factory, null, session -> {
             task.run(session);
             return null;
         });
     }
 
     /**
+     * Wrap given runnable job into KeycloakTransaction.
+     * @param factory The session factory to use
+     * @param context The context from the previous session
+     * @param task The task to execute
+     */
+    public static void runJobInTransaction(KeycloakSessionFactory factory, KeycloakContext context, KeycloakSessionTask task) {
+        runJobInTransactionWithResult(factory, context, session -> {
+            task.run(session);
+            return null;
+        });
+    }
+
+    /**
+     * Sets up the context for the specified session with the RealmModel.
+     *
+     * @param origContext The original context to propagate
+     * @param targetSession The new target session to propagate the context to
+     */
+    public static void cloneContextRealmClientToSession(final KeycloakContext origContext, final KeycloakSession targetSession) {
+        cloneContextToSession(origContext, targetSession, false);
+    }
+
+    /**
+     * Sets up the context for the specified session with the RealmModel, clientModel and
+     * AuthenticatedSessionModel.
+     *
+     * @param origContext The original context to propagate
+     * @param targetSession The new target session to propagate the context to
+     */
+    public static void cloneContextRealmClientSessionToSession(final KeycloakContext origContext, final KeycloakSession targetSession) {
+        cloneContextToSession(origContext, targetSession, true);
+    }
+
+    /**
+     * Sets up the context for the specified session.The original realm's context is used to
+     * determine what models need to be re-loaded using the current session. The models
+     * in the context are re-read from the new session via the IDs.
+     */
+    private static void cloneContextToSession(final KeycloakContext origContext, final KeycloakSession targetSession,
+            final boolean includeAuthenticatedSessionModel) {
+        if (origContext == null) {
+            return;
+        }
+
+        // setup realm model if necessary.
+        RealmModel realmModel = null;
+        if (origContext.getRealm() != null) {
+            realmModel = targetSession.realms().getRealm(origContext.getRealm().getId());
+            if (realmModel != null) {
+                targetSession.getContext().setRealm(realmModel);
+            }
+        }
+
+        // setup client model if necessary.
+        ClientModel clientModel = null;
+        if (origContext.getClient() != null) {
+            if (origContext.getRealm() == null || !Objects.equals(origContext.getRealm().getId(), origContext.getClient().getRealm().getId())) {
+                realmModel = targetSession.realms().getRealm(origContext.getClient().getRealm().getId());
+            }
+            if (realmModel != null) {
+                clientModel = targetSession.clients().getClientById(realmModel, origContext.getClient().getId());
+                if (clientModel != null) {
+                    targetSession.getContext().setClient(clientModel);
+                }
+            }
+        }
+
+        // setup auth session model if necessary.
+        if (includeAuthenticatedSessionModel && origContext.getAuthenticationSession() != null) {
+            if (origContext.getClient() == null || !Objects.equals(origContext.getClient().getId(), origContext.getAuthenticationSession().getClient().getId())) {
+                realmModel = (origContext.getRealm() == null || !Objects.equals(origContext.getRealm().getId(), origContext.getAuthenticationSession().getRealm().getId()))
+                        ? targetSession.realms().getRealm(origContext.getAuthenticationSession().getRealm().getId())
+                        : targetSession.getContext().getRealm();
+                clientModel = (realmModel != null)
+                        ? targetSession.clients().getClientById(realmModel, origContext.getAuthenticationSession().getClient().getId())
+                        : null;
+            }
+            if (clientModel != null) {
+                RootAuthenticationSessionModel rootAuthSession = targetSession.authenticationSessions().getRootAuthenticationSession(
+                        realmModel, origContext.getAuthenticationSession().getParentSession().getId());
+                if (rootAuthSession != null) {
+                    AuthenticationSessionModel authSessionModel = rootAuthSession.getAuthenticationSession(clientModel,
+                            origContext.getAuthenticationSession().getTabId());
+                    if (authSessionModel != null) {
+                        targetSession.getContext().setAuthenticationSession(authSessionModel);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Wrap a given callable job into a KeycloakTransaction.
+     * @param <V> The type for the result
+     * @param factory The session factory
+     * @param callable The callable to execute
+     * @return The return value from the callable
      */
     public static <V> V runJobInTransactionWithResult(KeycloakSessionFactory factory, final KeycloakSessionTaskWithResult<V> callable) {
+        return runJobInTransactionWithResult(factory, null, callable);
+    }
+
+    /**
+     * Wrap a given callable job into a KeycloakTransaction.
+     * @param <V> The type for the result
+     * @param factory The session factory
+     * @param context The context from the previous session to use
+     * @param callable The callable to execute
+     * @return The return value from the callable
+     */
+    public static <V> V runJobInTransactionWithResult(KeycloakSessionFactory factory, KeycloakContext context, final KeycloakSessionTaskWithResult<V> callable) {
         V result;
         try (KeycloakSession session = factory.create()) {
             session.getTransactionManager().begin();
             try {
+                cloneContextRealmClientToSession(context, session);
                 result = callable.run(session);
             } catch (Throwable t) {
                 session.getTransactionManager().setRollbackOnly();
@@ -273,78 +386,6 @@ public final class KeycloakModelUtils {
             }
         }
         return result;
-    }
-
-    /**
-     * Creates a new {@link KeycloakSession} and runs the specified callable in a new transaction. If the transaction fails
-     * with a SQL retriable error, the method re-executes the specified callable until it either succeeds or the maximum number
-     * of attempts is reached, leaving some increasing random delay milliseconds between the invocations. It uses the exponential
-     * backoff + jitter algorithm to compute the delay, which is limited to {@code attemptsCount * retryIntervalMillis}.
-     * More details https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-     *
-     * @param factory a reference to the {@link KeycloakSessionFactory}.
-     * @param callable a reference to the {@link KeycloakSessionTaskWithResult} that will be executed in a retriable way.
-     * @param attemptsCount the maximum number of attempts to execute the callable.
-     * @param retryIntervalMillis the base interval value in millis used to compute the delay.
-     * @param <V> the type returned by the callable.
-     * @return the value computed by the callable.
-     */
-    public static <V> V runJobInRetriableTransaction(final KeycloakSessionFactory factory, final KeycloakSessionTaskWithResult<V> callable,
-                                                     final int attemptsCount, final int retryIntervalMillis) {
-        int retryCount = 0;
-        Random rand = new Random();
-        while (true) {
-            try (KeycloakSession session = factory.create()) {
-                session.getTransactionManager().begin();
-                return callable.run(session);
-            } catch (RuntimeException re) {
-                if (isExceptionRetriable(re) && ++retryCount < attemptsCount) {
-                    int delay = Math.min(retryIntervalMillis * attemptsCount, (1 << retryCount) * retryIntervalMillis)
-                            + rand.nextInt(retryIntervalMillis);
-                    logger.debugf("Caught retriable exception, retrying request. Retry count = %s, retry delay = %s", retryCount, delay);
-                    try {
-                        Thread.sleep(delay);
-                    } catch (InterruptedException ie) {
-                        ie.addSuppressed(re);
-                        throw new RuntimeException(ie);
-                    }
-                } else {
-                    if (retryCount == attemptsCount) {
-                        logger.debug("Exhausted all retry attempts for request.");
-                        throw new RuntimeException("retries exceeded", re);
-                    }
-                    throw re;
-                }
-            }
-        }
-    }
-
-    /**
-     * Checks if the specified exception is retriable or not. A retriable exception must be an instance of {@code SQLException}
-     * and must have a 40001 SQL retriable state. This is a standard SQL state as defined in SQL standard, and across the
-     * implementations its meaning boils down to "deadlock" (applies to Postgres, MSSQL, Oracle, MySQL, and others).
-     *
-     * @param exception the exception to be checked.
-     * @return {@code true} if the exception is retriable; {@code false} otherwise.
-     */
-    public static boolean isExceptionRetriable(final Throwable exception) {
-        Objects.requireNonNull(exception);
-        // first find the root cause and check if it is a SQLException
-        Throwable rootCause = exception;
-        while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
-            rootCause = rootCause.getCause();
-        }
-        // JTA transaction handler might add multiple suppressed exceptions to the root cause, evaluate each of those
-        for (Throwable suppressed : rootCause.getSuppressed()) {
-            if (isExceptionRetriable(suppressed)) {
-                return true;
-            }
-        };
-        if (rootCause instanceof SQLException) {
-            // check if the exception state is a recoverable one (40001)
-            return "40001".equals(((SQLException) rootCause).getSQLState());
-        }
-        return false;
     }
 
     /**
@@ -560,14 +601,6 @@ public final class KeycloakModelUtils {
         });
     }
 
-    public static String resolveFirstAttribute(GroupModel group, String name) {
-        String value = group.getFirstAttribute(name);
-        if (value != null) return value;
-        if (group.getParentId() == null) return null;
-        return resolveFirstAttribute(group.getParent(), name);
-
-    }
-
     public static Collection<String> resolveAttribute(GroupModel group, String name, boolean aggregateAttrs) {
         Set<String> values = group.getAttributeStream(name).collect(Collectors.toSet());
         if ((values.isEmpty() || aggregateAttrs) && group.getParentId() != null) {
@@ -587,7 +620,6 @@ public final class KeycloakModelUtils {
         }
         Stream<Collection<String>> attributes = user.getGroupsStream()
                 .map(group -> resolveAttribute(group, name, aggregateAttrs))
-                .filter(Objects::nonNull)
                 .filter(attr -> !attr.isEmpty());
 
         if (!aggregateAttrs) {
@@ -658,7 +690,18 @@ public final class KeycloakModelUtils {
         return segments;
     }
 
-    public static GroupModel findGroupByPath(RealmModel realm, String path) {
+    /**
+     * Finds group by path. Path is separated by '/' character. For example: /group/subgroup/subsubgroup
+     * <p />
+     * The method takes into consideration also groups with '/' in their name. For example: /group/sub/group/subgroup
+     *
+     * @param session Keycloak session
+     * @param realm The realm
+     * @param path Path that will be searched among groups
+     *
+     * @return {@code GroupModel} corresponding to the given {@code path} or {@code null} if no group was found
+     */
+    public static GroupModel findGroupByPath(KeycloakSession session, RealmModel realm, String path) {
         if (path == null) {
             return null;
         }
@@ -670,24 +713,41 @@ public final class KeycloakModelUtils {
         }
         String[] split = path.split(GROUP_PATH_SEPARATOR);
         if (split.length == 0) return null;
+        return getGroupModel(session.groups(), realm, null, split, 0);
+    }
 
-        return realm.getTopLevelGroupsStream().map(group -> {
-            String groupName = group.getName();
-            String[] pathSegments = formatPathSegments(split, 0, groupName);
-
-            if (groupName.equals(pathSegments[0])) {
-                if (pathSegments.length == 1) {
-                    return group;
-                } else {
-                    if (pathSegments.length > 1) {
-                        GroupModel subGroup = findSubGroup(pathSegments, 1, group);
-                        if (subGroup != null) return subGroup;
-                    }
-                }
-
-            }
+    /**
+     * Finds group by path. Variant when you have the path already separated by
+     * group names.
+     *
+     * @param session Keycloak session
+     * @param realm The realm
+     * @param path Path The path hierarchy of groups
+     *
+     * @return {@code GroupModel} corresponding to the given {@code path} or {@code null} if no group was found
+     */
+    public static GroupModel findGroupByPath(KeycloakSession session, RealmModel realm, String[] path) {
+        if (path == null || path.length == 0) {
             return null;
-        }).filter(Objects::nonNull).findFirst().orElse(null);
+        }
+        return getGroupModel(session.groups(), realm, null, path, 0);
+    }
+
+    private static GroupModel getGroupModel(GroupProvider groupProvider, RealmModel realm, GroupModel parent, String[] split, int index) {
+        StringBuilder nameBuilder = new StringBuilder();
+        for (int i = index; i < split.length; i++) {
+            nameBuilder.append(split[i]);
+            GroupModel group = groupProvider.getGroupByName(realm, parent, nameBuilder.toString());
+            if (group != null) {
+                if (i < split.length-1) {
+                    return getGroupModel(groupProvider, realm, group, split, i+1);
+                } else {
+                    return group;
+                }
+            }
+            nameBuilder.append(GROUP_PATH_SEPARATOR);
+        }
+        return null;
     }
 
     private static void buildGroupPath(StringBuilder sb, String groupName, GroupModel parent) {
@@ -724,17 +784,6 @@ public final class KeycloakModelUtils {
         }
 
         return normalized;
-    }
-
-    /**
-     * @param client    {@link ClientModel}
-     * @param container {@link ScopeContainerModel}
-     * @return
-     * @deprecated Use {@link #getClientScopeMappingsStream(ClientModel, ScopeContainerModel)}  getClientScopeMappingsStream} instead.
-     */
-    @Deprecated
-    public static Set<RoleModel> getClientScopeMappings(ClientModel client, ScopeContainerModel container) {
-        return getClientScopeMappingsStream(client, container).collect(Collectors.toSet());
     }
 
     public static Stream<RoleModel> getClientScopeMappingsStream(ClientModel client, ScopeContainerModel container) {
@@ -805,10 +854,37 @@ public final class KeycloakModelUtils {
         if ((realmFlow = realm.getDirectGrantFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
         if ((realmFlow = realm.getResetCredentialsFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
         if ((realmFlow = realm.getDockerAuthenticationFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
+        if ((realmFlow = realm.getFirstBrokerLoginFlow()) != null && realmFlow.getId().equals(model.getId())) return true;
 
         return realm.getIdentityProvidersStream().anyMatch(idp ->
                 Objects.equals(idp.getFirstBrokerLoginFlowId(), model.getId()) ||
                         Objects.equals(idp.getPostBrokerLoginFlowId(), model.getId()));
+    }
+
+    /**
+     * Recursively remove authentication flow (including all subflows and executions) from the model storage
+     *
+     * @param realm
+     * @param authFlow flow to delete
+     * @param flowUnavailableHandler Will be executed when flow or some of it's subflow is null
+     * @param builtinFlowHandler will be executed when flow is built-in flow
+     */
+    public static void deepDeleteAuthenticationFlow(RealmModel realm, AuthenticationFlowModel authFlow, Runnable flowUnavailableHandler, Runnable builtinFlowHandler) {
+        if (authFlow == null) {
+            flowUnavailableHandler.run();
+            return;
+        }
+        if (authFlow.isBuiltIn()) {
+            builtinFlowHandler.run();
+        }
+
+        realm.getAuthenticationExecutionsStream(authFlow.getId())
+                .map(AuthenticationExecutionModel::getFlowId)
+                .filter(Objects::nonNull)
+                .map(realm::getAuthenticationFlowById)
+                .forEachOrdered(subflow -> deepDeleteAuthenticationFlow(realm, subflow, flowUnavailableHandler, builtinFlowHandler));
+
+        realm.removeAuthenticationFlow(authFlow);
     }
 
     public static ClientScopeModel getClientScopeByName(RealmModel realm, String clientScopeName) {
@@ -930,9 +1006,9 @@ public final class KeycloakModelUtils {
 
     /**
      * Returns <code>true</code> if given realm has attribute {@link Constants#REALM_ATTR_USERNAME_CASE_SENSITIVE}
-     * set and its value is <code>true</code>. Otherwise default value of it is returned. The default setting 
+     * set and its value is <code>true</code>. Otherwise default value of it is returned. The default setting
      * can be seen at {@link Constants#REALM_ATTR_USERNAME_CASE_SENSITIVE_DEFAULT}.
-     * 
+     *
      * @param realm
      * @return See the description
      * @throws NullPointerException if <code>realm</code> is <code>null</code>
@@ -940,4 +1016,21 @@ public final class KeycloakModelUtils {
     public static boolean isUsernameCaseSensitive(RealmModel realm) {
         return realm.getAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, REALM_ATTR_USERNAME_CASE_SENSITIVE_DEFAULT);
     }
+
+    /**
+     * Sets the default groups on the realm
+     * @param session
+     * @param realm
+     * @param groups
+     * @throws RuntimeException if a group does not exist
+     */
+    public static void setDefaultGroups(KeycloakSession session, RealmModel realm, Stream<String> groups) {
+        realm.getDefaultGroupsStream().collect(Collectors.toList()).forEach(realm::removeDefaultGroup);
+        groups.forEach(path -> {
+            GroupModel found = KeycloakModelUtils.findGroupByPath(session, realm, path);
+            if (found == null) throw new RuntimeException("default group in realm rep doesn't exist: " + path);
+            realm.addDefaultGroup(found);
+        });
+    }
+
 }

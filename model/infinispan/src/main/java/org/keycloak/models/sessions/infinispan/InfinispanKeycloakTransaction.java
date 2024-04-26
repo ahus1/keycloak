@@ -95,6 +95,11 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
                 public String toString() {
                     return String.format("CacheTaskWithValue: Operation 'put' for key %s", key);
                 }
+
+                @Override
+                public Operation getOperation() {
+                    return Operation.PUT;
+                }
             });
         }
     }
@@ -106,7 +111,7 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
         if (tasks.containsKey(taskKey)) {
             throw new IllegalStateException("Can't add session: task in progress for session");
         } else {
-            tasks.put(taskKey, new CacheTaskWithValue<V>(value) {
+            tasks.put(taskKey, new CacheTaskWithValue<V>(value, lifespan, lifespanUnit) {
                 @Override
                 public void execute() {
                     decorateCache(cache).put(key, value, lifespan, lifespanUnit);
@@ -115,6 +120,11 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
                 @Override
                 public String toString() {
                     return String.format("CacheTaskWithValue: Operation 'put' for key %s, lifespan %d TimeUnit %s", key, lifespan, lifespanUnit);
+                }
+
+                @Override
+                public Operation getOperation() {
+                    return Operation.PUT;
                 }
             });
         }
@@ -140,21 +150,27 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
                 public String toString() {
                     return String.format("CacheTaskWithValue: Operation 'putIfAbsent' for key %s", key);
                 }
+
+                @Override
+                public Operation getOperation() {
+                    return Operation.PUT;
+                }
             });
         }
     }
 
     public <K, V> void replace(Cache<K, V> cache, K key, V value, long lifespan, TimeUnit lifespanUnit) {
-        log.tracev("Adding cache operation: {0} on {1}", CacheOperation.REPLACE, key);
+        log.tracev("Adding cache operation: {0} on {1}. Lifespan {2} {3}.", CacheOperation.REPLACE, key, lifespan, lifespanUnit);
 
         Object taskKey = getTaskKey(cache, key);
         CacheTask current = tasks.get(taskKey);
         if (current != null) {
             if (current instanceof CacheTaskWithValue) {
                 ((CacheTaskWithValue<V>) current).setValue(value);
+                ((CacheTaskWithValue<V>) current).updateLifespan(lifespan, lifespanUnit);
             }
         } else {
-            tasks.put(taskKey, new CacheTaskWithValue<V>(value) {
+            tasks.put(taskKey, new CacheTaskWithValue<V>(value, lifespan, lifespanUnit) {
                 @Override
                 public void execute() {
                     decorateCache(cache).replace(key, value, lifespan, lifespanUnit);
@@ -186,7 +202,14 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
 
         Object taskKey = getTaskKey(cache, key);
 
-        // TODO:performance Eventual performance optimization could be to skip "cache.remove" if item was added in this transaction (EG. authenticationSession valid for single request due to automatic SSO login)
+        CacheTask current = tasks.get(taskKey);
+        if (current != null) {
+            if (current instanceof CacheTaskWithValue && ((CacheTaskWithValue<?>) current).getOperation() == Operation.PUT) {
+                tasks.remove(taskKey);
+                return;
+            }
+        }
+
         tasks.put(taskKey, new CacheTask() {
 
             @Override
@@ -230,11 +253,21 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
         void execute();
     }
 
-    public abstract class CacheTaskWithValue<V> implements CacheTask {
+    public enum Operation { PUT, OTHER }
+
+    public static abstract class CacheTaskWithValue<V> implements CacheTask {
         protected V value;
+        protected long lifespan;
+        protected TimeUnit lifespanUnit;
 
         public CacheTaskWithValue(V value) {
+            this(value, -1, TimeUnit.SECONDS);
+        }
+
+        public CacheTaskWithValue(V value, long lifespan, TimeUnit lifespanUnit) {
             this.value = value;
+            this.lifespan = lifespan;
+            this.lifespanUnit = lifespanUnit;
         }
 
         public V getValue() {
@@ -243,6 +276,15 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
 
         public void setValue(V value) {
             this.value = value;
+        }
+
+        public void updateLifespan(long lifespan, TimeUnit lifespanUnit) {
+            this.lifespan = lifespan;
+            this.lifespanUnit = lifespanUnit;
+        }
+
+        public Operation getOperation() {
+            return Operation.OTHER;
         }
     }
 

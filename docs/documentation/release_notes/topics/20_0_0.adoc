@@ -35,7 +35,7 @@ Console:
 * `hostname-url`
 * `hostname-admin-url`
 
-More details can be found at the https://www.keycloak.org/server/hostname[Configuring the Hostname Guide].
+More details can be found at the https://www.keycloak.org/server/hostname[Configuring the Hostname] {section}.
 
 = Improvements to `kc.bat` when running Keycloak on Windows
 
@@ -79,7 +79,7 @@ https://github.com/sudeepd[Sudeep Das] and https://github.com/isaacjensen[Isaac 
 = Search groups by attribute
 
 It is now possible to search groups by attribute through the Admin REST API. Thanks to
-https://github.com/Redhat-Alice[Alice] for this contribution.
+https://github.com/alice-wondered[Alice] for this contribution.
 
 = View group membership in the account console
 

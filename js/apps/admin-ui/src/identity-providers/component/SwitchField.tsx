@@ -8,6 +8,7 @@ type FieldType = "boolean" | "string";
 
 type SwitchFieldProps = FieldProps & {
   fieldType?: FieldType;
+  defaultValue?: string | boolean;
 };
 
 export const SwitchField = ({
@@ -15,20 +16,23 @@ export const SwitchField = ({
   field,
   fieldType = "string",
   isReadOnly = false,
+  defaultValue,
 }: SwitchFieldProps) => {
-  const { t } = useTranslation("identity-providers");
+  const { t } = useTranslation();
   const { control } = useFormContext();
   return (
     <FormGroupField label={label}>
       <Controller
         name={field}
-        defaultValue={fieldType === "string" ? "false" : false}
+        defaultValue={
+          defaultValue ? defaultValue : fieldType === "string" ? "false" : false
+        }
         control={control}
         render={({ field }) => (
           <Switch
             id={label}
-            label={t("common:on")}
-            labelOff={t("common:off")}
+            label={t("on")}
+            labelOff={t("off")}
             isChecked={
               fieldType === "string"
                 ? field.value === "true"

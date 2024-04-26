@@ -30,11 +30,6 @@
     <name>Keycloak Authz: Policy Enforcer</name>
     <packaging>jar</packaging>
 
-    <properties>
-        <jakarta.servlet.version>6.0.0</jakarta.servlet.version>
-        <wildfly-elytron.version>2.0.0.Final</wildfly-elytron.version>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>org.keycloak</groupId>
@@ -45,13 +40,11 @@
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
-            <version>${jakarta.servlet.version}</version>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-http-oidc</artifactId>
-            <version>${wildfly-elytron.version}</version>
             <optional>true</optional>
         </dependency>
     </dependencies>

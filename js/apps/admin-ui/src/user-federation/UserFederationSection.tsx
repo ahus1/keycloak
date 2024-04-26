@@ -18,16 +18,17 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { ClickableCard } from "../components/keycloak-card/ClickableCard";
 import { KeycloakCard } from "../components/keycloak-card/KeycloakCard";
 import { ViewHeader } from "../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../context/auth/AdminClient";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
 import helpUrls from "../help-urls";
 import { toUpperCase } from "../util";
+import { useFetch } from "../utils/useFetch";
 import { ManagePriorityDialog } from "./ManagePriorityDialog";
 import { toCustomUserFederation } from "./routes/CustomUserFederation";
 import { toNewCustomUserFederation } from "./routes/NewCustomUserFederation";
@@ -40,9 +41,8 @@ export default function UserFederationSection() {
   const [userFederations, setUserFederations] =
     useState<ComponentRepresentation[]>();
   const { addAlert, addError } = useAlerts();
-  const { t } = useTranslation("user-federation");
+  const { t } = useTranslation();
   const { realm } = useRealm();
-  const { adminClient } = useAdminClient();
   const [key, setKey] = useState(0);
   const refresh = () => setKey(new Date().getTime());
 
@@ -67,7 +67,7 @@ export default function UserFederationSection() {
     (userFederations) => {
       setUserFederations(userFederations);
     },
-    [key]
+    [key],
   );
 
   const ufAddProviderDropdownItems = useMemo(
@@ -84,7 +84,7 @@ export default function UserFederationSection() {
             : toUpperCase(p.id)}
         </DropdownItem>
       )),
-    []
+    [],
   );
 
   const lowerButtonProps = {
@@ -99,7 +99,7 @@ export default function UserFederationSection() {
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
     titleKey: t("userFedDeleteConfirmTitle"),
     messageKey: t("userFedDeleteConfirm"),
-    continueButtonLabel: "common:delete",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
@@ -107,7 +107,7 @@ export default function UserFederationSection() {
         refresh();
         addAlert(t("userFedDeletedSuccess"), AlertVariant.success);
       } catch (error) {
-        addError("user-federation:userFedDeleteError", error);
+        addError("userFedDeleteError", error);
       }
     },
   });
@@ -150,15 +150,15 @@ export default function UserFederationSection() {
               }}
               data-testid="card-delete"
             >
-              {t("common:delete")}
+              {t("delete")}
             </DropdownItem>,
           ]}
           title={userFederation.name!}
           footerText={toUpperCase(userFederation.providerId!)}
           labelText={
             userFederation.config?.["enabled"]?.[0] !== "false"
-              ? `${t("common:enabled")}`
-              : `${t("common:disabled")}`
+              ? `${t("enabled")}`
+              : `${t("disabled")}`
           }
           labelColor={
             userFederation.config?.["enabled"]?.[0] !== "false"
@@ -181,12 +181,12 @@ export default function UserFederationSection() {
       )}
       <ViewHeader
         titleKey="userFederation"
-        subKey="user-federation:userFederationExplain"
+        subKey="userFederationExplain"
         helpUrl={helpUrls.userFederationUrl}
         {...(userFederations && userFederations.length > 0
           ? {
               lowerDropdownItems: ufAddProviderDropdownItems,
-              lowerDropdownMenuTitle: "user-federation:addNewProvider",
+              lowerDropdownMenuTitle: "addNewProvider",
               lowerButton: lowerButtonProps,
             }
           : {})}
@@ -211,7 +211,7 @@ export default function UserFederationSection() {
                   key={p.id}
                   onClick={() =>
                     navigate(
-                      toNewCustomUserFederation({ realm, providerId: p.id! })
+                      toNewCustomUserFederation({ realm, providerId: p.id! }),
                     )
                   }
                   data-testid={`${p.id}-card`}

@@ -1,3 +1,4 @@
+import { v4 as uuid } from "uuid";
 import SidebarPage from "../support/pages/admin-ui/SidebarPage";
 import LoginPage from "../support/pages/LoginPage";
 import RealmSettingsPage from "../support/pages/admin-ui/manage/realm_settings/RealmSettingsPage";
@@ -11,7 +12,7 @@ const masthead = new Masthead();
 const realmSettingsPage = new RealmSettingsPage();
 
 describe("Realm settings general tab tests", () => {
-  const realmName = "Realm_" + crypto.randomUUID();
+  const realmName = "Realm_" + uuid();
 
   beforeEach(() => {
     loginPage.logIn();
@@ -31,13 +32,13 @@ describe("Realm settings general tab tests", () => {
     sidebarPage.goToRealmSettings();
     realmSettingsPage.toggleSwitch(
       realmSettingsPage.managedAccessSwitch,
-      false
+      false,
     );
     realmSettingsPage.save(realmSettingsPage.generalSaveBtn);
     masthead.checkNotificationMessage("Realm successfully updated", true);
     realmSettingsPage.toggleSwitch(
       realmSettingsPage.managedAccessSwitch,
-      false
+      false,
     );
     realmSettingsPage.save(realmSettingsPage.generalSaveBtn);
     masthead.checkNotificationMessage("Realm successfully updated", true);
@@ -51,9 +52,20 @@ describe("Realm settings general tab tests", () => {
     realmSettingsPage.disableRealm();
     masthead.checkNotificationMessage("Realm successfully updated", true);
 
+    // Sometimes it takes the Keycloak server a while to disable the realm, even though the notification message has been displayed.
+    // To prevent flaky tests, we wait a second before continuing.
+    cy.wait(1000);
+
     // Re-enable realm
     realmSettingsPage.toggleSwitch(`${realmName}-switch`);
     masthead.checkNotificationMessage("Realm successfully updated");
+  });
+
+  it("Fail to set Realm ID to empty", () => {
+    sidebarPage.goToRealmSettings();
+    realmSettingsPage.clearRealmId();
+    realmSettingsPage.saveGeneral();
+    cy.get("#kc-realm-id-helper").should("have.text", "Required field");
   });
 
   it("Modify Display name", () => {
@@ -126,8 +138,8 @@ describe("Realm settings general tab tests", () => {
         "have.attr",
         "href",
         `${Cypress.env(
-          "KEYCLOAK_SERVER"
-        )}/realms/${realmName}/.well-known/openid-configuration`
+          "KEYCLOAK_SERVER",
+        )}/realms/${realmName}/.well-known/openid-configuration`,
       )
       .should("have.attr", "target", "_blank")
       .should("have.attr", "rel", "noreferrer noopener");
@@ -151,8 +163,8 @@ describe("Realm settings general tab tests", () => {
         "have.attr",
         "href",
         `${Cypress.env(
-          "KEYCLOAK_SERVER"
-        )}/realms/${realmName}/protocol/saml/descriptor`
+          "KEYCLOAK_SERVER",
+        )}/realms/${realmName}/protocol/saml/descriptor`,
       )
       .should("have.attr", "target", "_blank")
       .should("have.attr", "rel", "noreferrer noopener");

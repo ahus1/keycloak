@@ -21,10 +21,9 @@ import org.keycloak.common.Version;
 import org.keycloak.headers.SecurityHeadersProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.services.util.CacheControlUtil;
-import org.keycloak.services.util.P3PHelper;
 
-import javax.ws.rs.core.CacheControl;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.CacheControl;
+import jakarta.ws.rs.core.Response;
 import java.io.InputStream;
 
 public class IframeUtil {
@@ -41,7 +40,6 @@ public class IframeUtil {
 
         InputStream resource = IframeUtil.class.getResourceAsStream(fileName);
         if (resource != null) {
-            P3PHelper.addP3PHeader(session);
             session.getProvider(SecurityHeadersProvider.class).options().allowAnyFrameAncestor();
             return Response.ok(resource).cacheControl(cacheControl).build();
         } else {

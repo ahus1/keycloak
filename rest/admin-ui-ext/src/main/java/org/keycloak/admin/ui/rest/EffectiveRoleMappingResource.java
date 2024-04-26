@@ -1,14 +1,17 @@
 package org.keycloak.admin.ui.rest;
 
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
+import java.util.stream.Stream;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -20,19 +23,15 @@ import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.RoleModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.resources.admin.permissions.AdminPermissionEvaluator;
 
-public class EffectiveRoleMappingResource extends RoleMappingResource {
-    private KeycloakSession session;
-    private RealmModel realm;
-    private AdminPermissionEvaluator auth;
+import static org.keycloak.admin.ui.rest.model.RoleMapper.convertToModel;
 
+public class EffectiveRoleMappingResource extends RoleMappingResource {
     public EffectiveRoleMappingResource(KeycloakSession session, RealmModel realm, AdminPermissionEvaluator auth) {
-        super(realm, auth);
-        this.realm = realm;
-        this.auth = auth;
-        this.session = session;
+        super(session, realm, auth);
     }
 
     @GET
@@ -58,9 +57,10 @@ public class EffectiveRoleMappingResource extends RoleMappingResource {
         if (clientScope == null) {
             throw new NotFoundException("Could not find client scope");
         }
-
         this.auth.clients().requireView(clientScope);
-        return this.mapping(clientScope::hasScope, auth.roles()::canMapClientScope).collect(Collectors.toList());
+        return toSortedClientRoles(
+                addSubClientRoles(clientScope.getScopeMappingsStream())
+                .filter(auth.roles()::canMapClientScope));
     }
 
     @GET
@@ -86,8 +86,11 @@ public class EffectiveRoleMappingResource extends RoleMappingResource {
         if (client == null) {
             throw new NotFoundException("Could not find client");
         }
+
         auth.clients().requireView(client);
-        return mapping(client::hasScope).collect(Collectors.toList());
+        return toSortedClientRoles(
+                addSubClientRoles(client.getScopeMappingsStream())
+                .filter(auth.roles()::canMapRole));
     }
 
     @GET
@@ -114,7 +117,10 @@ public class EffectiveRoleMappingResource extends RoleMappingResource {
             throw new NotFoundException("Could not find group");
         }
 
-        return mapping(group::hasRole).collect(Collectors.toList());
+        auth.groups().requireView(group);
+        return toSortedClientRoles(
+                addSubClientRoles(addParents(group).flatMap(GroupModel::getRoleMappingsStream))
+                .filter(auth.roles()::canMapRole));
     }
 
     @GET
@@ -141,8 +147,14 @@ public class EffectiveRoleMappingResource extends RoleMappingResource {
             if (auth.users().canQuery()) throw new NotFoundException("User not found");
             else throw new ForbiddenException();
         }
-
-        return mapping(user::hasRole).collect(Collectors.toList());
+        auth.users().requireView(user);
+        return toSortedClientRoles(
+                addSubClientRoles(Stream.concat(
+                user.getRoleMappingsStream(),
+                user.getGroupsStream()
+                        .flatMap(g -> addParents(g))
+                        .flatMap(GroupModel::getRoleMappingsStream)))
+                .filter(auth.roles()::canMapRole));
     }
 
     @GET
@@ -164,7 +176,38 @@ public class EffectiveRoleMappingResource extends RoleMappingResource {
             )}
     )
     public final List<ClientRole> listCompositeRealmRoleMappings() {
-        return mapping(o -> true).collect(Collectors.toList());
+        auth.roles().requireList(realm);
+        final RoleModel defaultRole = this.realm.getDefaultRole();
+        //this definitely does not return what the descriptions says
+        return toSortedClientRoles(
+                addSubClientRoles(Stream.of(defaultRole))
+                .filter(auth.roles()::canMapRole));
     }
 
+    private Stream<RoleModel> addSubClientRoles(Stream<RoleModel> roles) {
+        return addSubRoles(roles).filter(RoleModel::isClientRole);
+    }
+
+    private List<ClientRole> toSortedClientRoles(Stream<RoleModel> roles) {
+        return roles.map(roleModel -> convertToModel(roleModel, realm))
+                .sorted(Comparator.comparing(ClientRole::getClient).thenComparing(ClientRole::getRole))
+                .collect(Collectors.toList());
+    }
+
+    private Stream<RoleModel> addSubRoles(Stream<RoleModel> roles) {
+        return addSubRoles(roles, new HashSet<>());
+    }
+    private Stream<RoleModel> addSubRoles(Stream<RoleModel> roles, HashSet<RoleModel> visited) {
+        List<RoleModel> roleList = roles.collect(Collectors.toList());
+        visited.addAll(roleList);
+        return Stream.concat(roleList.stream(), roleList.stream().flatMap(r -> addSubRoles(r.getCompositesStream().filter(s -> !visited.contains(s)), visited)));
+    }
+
+    private Stream<GroupModel> addParents(GroupModel group) {
+        //no cycle check here, I hope that's fine
+        if (group.getParent() == null) {
+            return Stream.of(group);
+        }
+        return Stream.concat(Stream.of(group), addParents(group.getParent()));
+    }
 }

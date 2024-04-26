@@ -16,7 +16,7 @@
  */
 package org.keycloak.utils;
 
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
 import org.jboss.logging.Logger;
 
 import java.util.regex.Matcher;
@@ -48,7 +48,22 @@ public class ReservedCharValidator {
             throw new ReservedCharException(message);
         }
     }
-
+    
+    public static void validateNoSpace(String str) {
+        if (str == null) return;
+        
+        Pattern pattern = Pattern.compile("\\s");
+        Matcher matcher = pattern.matcher(str);
+        
+        if (matcher.find()) {
+            String message = "Empty Space not allowed.";
+            logger.warn(message);
+            throw new ReservedCharException(message);
+        }
+        
+        validate(str, RESERVED_CHARS_PATTERN);
+    }
+    
     public static void validate(String str) {
         validate(str, RESERVED_CHARS_PATTERN);
     }

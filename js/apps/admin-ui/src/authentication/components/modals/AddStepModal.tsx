@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
+import type { AuthenticationProviderRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/authenticatorConfigRepresentation";
 import {
   Button,
   ButtonVariant,
@@ -9,10 +8,12 @@ import {
   PageSection,
   Radio,
 } from "@patternfly/react-core";
-import type { AuthenticationProviderRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/authenticatorConfigRepresentation";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { adminClient } from "../../../admin-client";
 import { PaginatingTableToolbar } from "../../../components/table-toolbar/PaginatingTableToolbar";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
+import { useFetch } from "../../../utils/useFetch";
 import useLocaleSort, { mapByKey } from "../../../utils/useLocaleSort";
 import { providerConditionFilter } from "../../FlowDetails";
 
@@ -55,8 +56,7 @@ type AddStepModalProps = {
 };
 
 export const AddStepModal = ({ name, type, onSelect }: AddStepModalProps) => {
-  const { t } = useTranslation("authentication");
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
 
   const [value, setValue] = useState<AuthenticationProviderRepresentation>();
   const [providers, setProviders] =
@@ -87,19 +87,19 @@ export const AddStepModal = ({ name, type, onSelect }: AddStepModalProps) => {
       }
     },
     (providers) => setProviders(providers),
-    []
+    [],
   );
 
-  const page = useMemo(
-    () =>
-      localeSort(providers ?? [], mapByKey("displayName"))
-        .filter(
-          (p) =>
-            p.displayName?.includes(search) || p.description?.includes(search)
-        )
-        .slice(first, first + max + 1),
-    [providers, search, first, max]
-  );
+  const page = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return localeSort(providers ?? [], mapByKey("displayName"))
+      .filter(
+        ({ displayName, description }) =>
+          displayName?.toLowerCase().includes(normalizedSearch) ||
+          description?.toLowerCase().includes(normalizedSearch),
+      )
+      .slice(first, first + max + 1);
+  }, [providers, search, first, max]);
 
   return (
     <Modal
@@ -114,7 +114,7 @@ export const AddStepModal = ({ name, type, onSelect }: AddStepModalProps) => {
           key="add"
           onClick={() => onSelect(value)}
         >
-          {t("common:add")}
+          {t("add")}
         </Button>,
         <Button
           data-testid="cancel"
@@ -125,7 +125,7 @@ export const AddStepModal = ({ name, type, onSelect }: AddStepModalProps) => {
             onSelect();
           }}
         >
-          {t("common:cancel")}
+          {t("cancel")}
         </Button>,
       ]}
     >
@@ -141,7 +141,7 @@ export const AddStepModal = ({ name, type, onSelect }: AddStepModalProps) => {
             setMax(max);
           }}
           inputGroupName="search"
-          inputGroupPlaceholder={t("common:search")}
+          inputGroupPlaceholder={t("search")}
           inputGroupOnEnter={setSearch}
         >
           <AuthenticationProviderList

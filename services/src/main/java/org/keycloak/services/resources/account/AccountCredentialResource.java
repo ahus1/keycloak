@@ -1,7 +1,7 @@
 package org.keycloak.services.resources.account;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import org.jboss.resteasy.annotations.cache.NoCache;
+import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
 import org.keycloak.common.util.reflections.Types;
@@ -21,22 +21,22 @@ import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.representations.account.CredentialMetadataRepresentation;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.services.ErrorResponse;
-import org.keycloak.services.ErrorResponseException;
 import org.keycloak.services.managers.Auth;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.utils.MediaType;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
@@ -158,18 +158,14 @@ public class AccountCredentialResource {
      */
     @GET
     @NoCache
-    @Produces(javax.ws.rs.core.MediaType.APPLICATION_JSON)
+    @Produces(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
     public Stream<CredentialContainer> credentialTypes(@QueryParam(TYPE) String type,
                                                      @QueryParam(USER_CREDENTIALS) Boolean userCredentials) {
         auth.requireOneOf(AccountRoles.MANAGE_ACCOUNT, AccountRoles.VIEW_PROFILE);
 
         boolean includeUserCredentials = userCredentials == null || userCredentials;
 
-        List<CredentialProvider> credentialProviders = session.getKeycloakSessionFactory().getProviderFactoriesStream(CredentialProvider.class)
-                .filter(f -> Types.supports(CredentialProvider.class, f, CredentialProviderFactory.class))
-                .map(f -> session.getProvider(CredentialProvider.class, f.getId()))
-                .collect(Collectors.toList());
-        Set<String> enabledCredentialTypes = getEnabledCredentialTypes(credentialProviders);
+        Set<String> enabledCredentialTypes = getEnabledCredentialTypes();
 
         Stream<CredentialModel> modelsStream = includeUserCredentials ? user.credentialManager().getStoredCredentialsStream() : Stream.empty();
         List<CredentialModel> models = modelsStream.collect(Collectors.toList());
@@ -219,7 +215,7 @@ public class AccountCredentialResource {
             return new CredentialContainer(metadata, userCredentialMetadataModels);
         };
 
-        return credentialProviders.stream()
+        return getCredentialProviders()
                 .filter(p -> type == null || Objects.equals(p.getType(), type))
                 .filter(p -> enabledCredentialTypes.contains(p.getType()))
                 .map(toCredentialContainer)
@@ -227,10 +223,16 @@ public class AccountCredentialResource {
                 .sorted(Comparator.comparing(CredentialContainer::getMetadata));
     }
 
+    private Stream<CredentialProvider> getCredentialProviders() {
+        return session.getKeycloakSessionFactory().getProviderFactoriesStream(CredentialProvider.class)
+                .filter(f -> Types.supports(CredentialProvider.class, f, CredentialProviderFactory.class))
+                .map(f -> session.getProvider(CredentialProvider.class, f.getId()));
+    }
+
     // Going through all authentication flows and their authentication executions to see if there is any authenticator of the corresponding
     // credential type.
-    private Set<String> getEnabledCredentialTypes(List<CredentialProvider> credentialProviders) {
-        Stream<String> enabledCredentialTypes = realm.getAuthenticationFlowsStream()
+    private Set<String> getEnabledCredentialTypes() {
+        return realm.getAuthenticationFlowsStream()
                 .filter(((Predicate<AuthenticationFlowModel>) this::isFlowEffectivelyDisabled).negate())
                 .flatMap(flow ->
                         realm.getAuthenticationExecutionsStream(flow.getId())
@@ -240,13 +242,7 @@ public class AccountCredentialResource {
                                 .filter(Objects::nonNull)
                                 .map(AuthenticatorFactory::getReferenceCategory)
                                 .filter(Objects::nonNull)
-                );
-
-        Set<String> credentialTypes = credentialProviders.stream()
-                .map(CredentialProvider::getType)
-                .collect(Collectors.toSet());
-
-        return enabledCredentialTypes.filter(credentialTypes::contains).collect(Collectors.toSet());
+                ).collect(Collectors.toSet());
     }
 
     // Returns true if flow is effectively disabled - either it's execution or some parent execution is disabled
@@ -265,6 +261,21 @@ public class AccountCredentialResource {
         return false;
     }
 
+    private void checkIfCanBeRemoved(String credentialType) {
+        Set<String> enabledCredentialTypes = getEnabledCredentialTypes();
+        CredentialProvider credentialProvider = getCredentialProviders()
+                .filter(p -> credentialType.equals(p.getType()) && enabledCredentialTypes.contains(p.getType()))
+                .findAny().orElse(null);
+        if (credentialProvider == null) {
+            throw new NotFoundException("Credential provider " + credentialType + " not found");
+        }
+        CredentialTypeMetadataContext ctx = CredentialTypeMetadataContext.builder().user(user).build(session);
+        CredentialTypeMetadata metadata = credentialProvider.getCredentialTypeMetadata(ctx);
+        if (!metadata.isRemoveable()) {
+            throw new BadRequestException("Credential type " + credentialType + " cannot be removed");
+        }
+    }
+
     /**
      * Remove a credential of current user
      *
@@ -277,8 +288,19 @@ public class AccountCredentialResource {
         auth.require(AccountRoles.MANAGE_ACCOUNT);
         CredentialModel credential = user.credentialManager().getStoredCredentialById(credentialId);
         if (credential == null) {
+            // Backwards compatibility with account console 1 - When stored credential is not found, it may be federated credential.
+            // In this case, it's ID needs to be something like "otp-id", which is returned by account REST GET endpoint as a placeholder
+            // for federated credentials (See CredentialHelper.createUserStorageCredentialRepresentation )
+            if (credentialId.endsWith("-id")) {
+                String credentialType = credentialId.substring(0, credentialId.length() - 3);
+                checkIfCanBeRemoved(credentialType);
+                user.credentialManager().disableCredentialType(credentialType);
+                return;
+            }
+
             throw new NotFoundException("Credential not found");
         }
+        checkIfCanBeRemoved(credential.getType());
         user.credentialManager().removeStoredCredentialById(credentialId);
     }
 

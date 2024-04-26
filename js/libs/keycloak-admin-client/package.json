@@ -9,13 +9,13 @@
   ],
   "types": "lib/index.d.ts",
   "engines": {
-    "node": "^12.20.0 || ^14.13.1 || >=16.0.0"
+    "node": ">=18"
   },
   "scripts": {
     "build": "wireit",
     "lint": "wireit",
     "test": "wireit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "wireit": {
     "build": {
@@ -37,20 +37,20 @@
     }
   },
   "dependencies": {
-    "camelize-ts": "^2.5.0",
-    "lodash-es": "^4.17.21",
+    "camelize-ts": "^3.0.0",
     "url-join": "^5.0.0",
-    "url-template": "^3.1.0"
+    "url-template": "^3.1.1"
   },
   "devDependencies": {
-    "@faker-js/faker": "^7.6.0",
-    "@types/chai": "^4.3.4",
-    "@types/lodash-es": "^4.17.7",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^18.16.0",
-    "chai": "^4.3.7",
-    "mocha": "^10.2.0",
-    "ts-node": "^10.9.1"
+    "@faker-js/faker": "^8.4.1",
+    "@types/chai": "^4.3.12",
+    "@types/lodash-es": "^4.17.12",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.24",
+    "chai": "^5.1.0",
+    "lodash-es": "^4.17.21",
+    "mocha": "^10.3.0",
+    "ts-node": "^10.9.2"
   },
   "author": {
     "name": "Red Hat, Inc.",

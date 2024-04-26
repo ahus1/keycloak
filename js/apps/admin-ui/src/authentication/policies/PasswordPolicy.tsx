@@ -1,3 +1,5 @@
+import type PasswordPolicyTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/passwordPolicyTypeRepresentation";
+import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
 import {
   ActionGroup,
   AlertVariant,
@@ -21,15 +23,13 @@ import { useEffect, useMemo, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import type PasswordPolicyTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/passwordPolicyTypeRepresentation";
-import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
-import { FormAccess } from "../../components/form-access/FormAccess";
-import { useAdminClient } from "../../context/auth/AdminClient";
+import { FormAccess } from "../../components/form/FormAccess";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { PolicyRow } from "./PolicyRow";
-import { parsePolicy, serializePolicy, SubmittedValues } from "./util";
+import { SubmittedValues, parsePolicy, serializePolicy } from "./util";
 
 type PolicySelectProps = {
   onSelect: (row: PasswordPolicyTypeRepresentation) => void;
@@ -37,16 +37,16 @@ type PolicySelectProps = {
 };
 
 const PolicySelect = ({ onSelect, selectedPolicies }: PolicySelectProps) => {
-  const { t } = useTranslation("authentication");
+  const { t } = useTranslation();
   const { passwordPolicies } = useServerInfo();
   const [open, setOpen] = useState(false);
 
   const policies = useMemo(
     () =>
       passwordPolicies?.filter(
-        (p) => selectedPolicies.find((o) => o.id === p.id) === undefined
+        (p) => selectedPolicies.find((o) => o.id === p.id) === undefined,
       ),
-    [selectedPolicies]
+    [selectedPolicies],
   );
 
   return (
@@ -79,10 +79,9 @@ export const PasswordPolicy = ({
   realm,
   realmUpdated,
 }: PasswordPolicyProps) => {
-  const { t } = useTranslation("authentication");
+  const { t } = useTranslation();
   const { passwordPolicies } = useServerInfo();
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
   const { realm: realmName } = useRealm();
 
@@ -124,7 +123,7 @@ export const PasswordPolicy = ({
       setupForm(updatedRealm);
       addAlert(t("updatePasswordPolicySuccess"), AlertVariant.success);
     } catch (error: any) {
-      addError("authentication:updatePasswordPolicyError", error);
+      addError("updatePasswordPolicyError", error);
     }
   };
 
@@ -165,14 +164,14 @@ export const PasswordPolicy = ({
                     type="submit"
                     isDisabled={!isDirty}
                   >
-                    {t("common:save")}
+                    {t("save")}
                   </Button>
                   <Button
                     data-testid="reload"
                     variant={ButtonVariant.link}
                     onClick={() => setupForm(realm)}
                   >
-                    {t("common:reload")}
+                    {t("reload")}
                   </Button>
                 </ActionGroup>
               </FormAccess>

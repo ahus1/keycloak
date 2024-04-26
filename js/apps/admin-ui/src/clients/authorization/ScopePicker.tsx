@@ -1,16 +1,17 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Controller, useFormContext } from "react-hook-form";
+import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
 import {
   FormGroup,
   Select,
   SelectOption,
   SelectVariant,
 } from "@patternfly/react-core";
-
-import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
+import { useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { HelpItem } from "ui-shared";
+
+import { adminClient } from "../../admin-client";
+import { useFetch } from "../../utils/useFetch";
 
 type Scope = {
   id: string;
@@ -18,14 +19,12 @@ type Scope = {
 };
 
 export const ScopePicker = ({ clientId }: { clientId: string }) => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { control } = useFormContext();
 
   const [open, setOpen] = useState(false);
   const [scopes, setScopes] = useState<ScopeRepresentation[]>();
   const [search, setSearch] = useState("");
-
-  const { adminClient } = useAdminClient();
 
   useFetch(
     () => {
@@ -39,7 +38,7 @@ export const ScopePicker = ({ clientId }: { clientId: string }) => {
       return adminClient.clients.listAllScopes(params);
     },
     setScopes,
-    [search]
+    [search],
   );
 
   const renderScopes = (scopes?: ScopeRepresentation[]) =>
@@ -53,10 +52,7 @@ export const ScopePicker = ({ clientId }: { clientId: string }) => {
     <FormGroup
       label={t("authorizationScopes")}
       labelIcon={
-        <HelpItem
-          helpText={t("clients-help:scopes")}
-          fieldLabelId="clients:scopes"
-        />
+        <HelpItem helpText={t("clientScopesHelp")} fieldLabelId="scopes" />
       }
       fieldId="scopes"
     >
@@ -70,8 +66,8 @@ export const ScopePicker = ({ clientId }: { clientId: string }) => {
             variant={SelectVariant.typeaheadMulti}
             chipGroupProps={{
               numChips: 3,
-              expandedText: t("common:hide"),
-              collapsedText: t("common:showRemaining"),
+              expandedText: t("hide"),
+              collapsedText: t("showRemaining"),
             }}
             onToggle={setOpen}
             isOpen={open}
@@ -86,7 +82,7 @@ export const ScopePicker = ({ clientId }: { clientId: string }) => {
                   ? selectedValue
                   : (selectedValue as Scope).name;
               const changedValue = field.value.find(
-                (o: Scope) => o.name === option
+                (o: Scope) => o.name === option,
               )
                 ? field.value.filter((item: Scope) => item.name !== option)
                 : [...field.value, selectedValue];

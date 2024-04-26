@@ -9,15 +9,15 @@ import {
 } from "@patternfly/react-core";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { HelpItem } from "ui-shared";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import {
   ConfirmDialogModal,
   useConfirmDialog,
 } from "../../components/confirm-dialog/ConfirmDialog";
-import { HelpItem } from "ui-shared";
 import { PasswordInput } from "../../components/password-input/PasswordInput";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import useToggle from "../../utils/useToggle";
 
 type ResetPasswordDialogProps = {
@@ -45,13 +45,15 @@ export const ResetPasswordDialog = ({
   refresh,
   onClose,
 }: ResetPasswordDialogProps) => {
-  const { t } = useTranslation("users");
+  const { t } = useTranslation();
   const {
     register,
     control,
     formState: { isValid, errors },
     watch,
     handleSubmit,
+    clearErrors,
+    setError,
   } = useForm<CredentialsForm>({
     defaultValues: credFormDefaultValues,
     mode: "onChange",
@@ -59,20 +61,16 @@ export const ResetPasswordDialog = ({
 
   const [confirm, toggle] = useToggle(true);
   const password = watch("password", "");
+  const passwordConfirmation = watch("passwordConfirmation", "");
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const [toggleConfirmSaveModal, ConfirmSaveModal] = useConfirmDialog({
-    titleKey: isResetPassword
-      ? "users:resetPasswordConfirm"
-      : "users:setPasswordConfirm",
+    titleKey: isResetPassword ? "resetPasswordConfirm" : "setPasswordConfirm",
     messageKey: isResetPassword
       ? t("resetPasswordConfirmText", { username: user.username })
       : t("setPasswordConfirmText", { username: user.username }),
-    continueButtonLabel: isResetPassword
-      ? "users:resetPassword"
-      : "users:savePassword",
+    continueButtonLabel: isResetPassword ? "resetPassword" : "savePassword",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: () => handleSubmit(saveUserPassword)(),
   });
@@ -90,6 +88,7 @@ export const ResetPasswordDialog = ({
           value: password,
         },
       });
+      user.requiredActions = ["UPDATE_PASSWORD"];
       const credentials = await adminClient.users.getCredentials({
         id: user.id!,
       });
@@ -100,28 +99,27 @@ export const ResetPasswordDialog = ({
             id: user.id!,
             credentialId: credentialLabel.id!,
           },
-          t("defaultPasswordLabel")
+          t("defaultPasswordLabel"),
         );
       }
       addAlert(
         isResetPassword
           ? t("resetCredentialsSuccess")
           : t("savePasswordSuccess"),
-        AlertVariant.success
+        AlertVariant.success,
       );
       refresh();
     } catch (error) {
       addError(
-        isResetPassword
-          ? "users:resetPasswordError"
-          : "users:savePasswordError",
-        error
+        isResetPassword ? "resetPasswordError" : "savePasswordError",
+        error,
       );
     }
 
     onClose();
   };
 
+  const { onChange, ...rest } = register("password", { required: true });
   return (
     <>
       <ConfirmSaveModal />
@@ -136,7 +134,7 @@ export const ResetPasswordDialog = ({
         toggleDialog={toggle}
         onConfirm={toggleConfirmSaveModal}
         confirmButtonDisabled={!isValid}
-        continueButtonLabel="common:save"
+        continueButtonLabel="save"
       >
         <Form
           id="userCredentials-form"
@@ -147,7 +145,7 @@ export const ResetPasswordDialog = ({
             name="password"
             label={t("password")}
             fieldId="password"
-            helperTextInvalid={t("common:required")}
+            helperTextInvalid={t("required")}
             validated={
               errors.password
                 ? ValidatedOptions.error
@@ -158,7 +156,17 @@ export const ResetPasswordDialog = ({
             <PasswordInput
               data-testid="passwordField"
               id="password"
-              {...register("password", { required: true })}
+              onChange={(e) => {
+                onChange(e);
+                if (passwordConfirmation !== e.currentTarget.value) {
+                  setError("passwordConfirmation", {
+                    message: t("confirmPasswordDoesNotMatch").toString(),
+                  });
+                } else {
+                  clearErrors("passwordConfirmation");
+                }
+              }}
+              {...rest}
             />
           </FormGroup>
           <FormGroup
@@ -189,7 +197,7 @@ export const ResetPasswordDialog = ({
             />
           </FormGroup>
           <FormGroup
-            label={t("common:temporaryPassword")}
+            label={t("temporaryPassword")}
             labelIcon={
               <HelpItem
                 helpText={t("temporaryPasswordHelpText")}
@@ -207,9 +215,9 @@ export const ResetPasswordDialog = ({
                   className="kc-temporaryPassword"
                   onChange={field.onChange}
                   isChecked={field.value}
-                  label={t("common:on")}
-                  labelOff={t("common:off")}
-                  aria-label={t("common:temporaryPassword")}
+                  label={t("on")}
+                  labelOff={t("off")}
+                  aria-label={t("temporaryPassword")}
                 />
               )}
             />

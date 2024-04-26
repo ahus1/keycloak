@@ -17,15 +17,14 @@
 
 package org.keycloak.testsuite.adapter.servlet;
 
+import org.hamcrest.MatcherAssert;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.drone.api.annotation.Drone;
 import org.jboss.arquillian.graphene.page.Page;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.After;
 import org.junit.Test;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.resource.ClientResource;
-import org.keycloak.common.Profile;
 import org.keycloak.protocol.oidc.OIDCLoginProtocolService;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
@@ -33,12 +32,11 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.testsuite.Assert;
 import org.keycloak.testsuite.adapter.AbstractServletsAdapterTest;
 import org.keycloak.testsuite.adapter.page.SessionPortal;
-import org.keycloak.testsuite.arquillian.annotation.DisableFeature;
-import org.keycloak.testsuite.auth.page.account.Sessions;
 import org.keycloak.testsuite.auth.page.login.Login;
 import org.keycloak.testsuite.arquillian.annotation.AppServerContainer;
 import org.keycloak.testsuite.pages.InfoPage;
 import org.keycloak.testsuite.pages.LogoutConfirmPage;
+import org.keycloak.testsuite.util.AccountHelper;
 import org.keycloak.testsuite.utils.arquillian.ContainerConstants;
 import org.keycloak.testsuite.util.SecondBrowser;
 import org.openqa.selenium.By;
@@ -68,9 +66,6 @@ public class SessionServletAdapterTest extends AbstractServletsAdapterTest {
     private SessionPortal sessionPortalPage;
 
     @Page
-    private Sessions testRealmSessions;
-
-    @Page
     protected LogoutConfirmPage logoutConfirmPage;
 
     @Page
@@ -79,7 +74,7 @@ public class SessionServletAdapterTest extends AbstractServletsAdapterTest {
     @Override
     public void setDefaultPageUriParameters() {
         super.setDefaultPageUriParameters();
-        testRealmSessions.setAuthRealm(DEMO);
+        oauth.realm(DEMO);
     }
 
     @Deployment(name = SessionPortal.DEPLOYMENT_NAME)
@@ -111,7 +106,7 @@ public class SessionServletAdapterTest extends AbstractServletsAdapterTest {
         driver2.findElement(By.id("password")).submit();
         assertCurrentUrlEquals(sessionPortalPage, driver2);
         String pageSource = driver2.getPageSource();
-        assertThat(pageSource, containsString("Counter=1"));
+        MatcherAssert.assertThat(pageSource, containsString("Counter=1"));
         // Counter increased now
         driver2.navigate().to(sessionPortalPage.toString());
         pageSource = driver2.getPageSource();
@@ -135,7 +130,7 @@ public class SessionServletAdapterTest extends AbstractServletsAdapterTest {
         driver2.navigate().to(sessionPortalPage.toString());
         assertCurrentUrlEquals(sessionPortalPage, driver2);
         pageSource = driver2.getPageSource();
-        assertThat(pageSource, containsString("Counter=3"));
+        MatcherAssert.assertThat(pageSource, containsString("Counter=3"));
 
         // Logout in driver2
         driver2.navigate().to(logoutUri);
@@ -210,12 +205,10 @@ public class SessionServletAdapterTest extends AbstractServletsAdapterTest {
 
     //KEYCLOAK-1216
     @Test
-    @DisableFeature(value = Profile.Feature.ACCOUNT2, skipRestart = true) // TODO remove this (KEYCLOAK-16228)
     public void testAccountManagementSessionsLogout() {
         // login as bburke
         loginAndCheckSession(testRealmLoginPage);
-        testRealmSessions.navigateTo();
-        testRealmSessions.logoutAll();
+        AccountHelper.logout(testRealmResource(), "bburke@redhat.com");
         // Assert I need to login again (logout was propagated to the app)
         loginAndCheckSession(testRealmLoginPage);
     }

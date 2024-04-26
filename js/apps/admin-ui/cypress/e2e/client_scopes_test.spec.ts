@@ -1,3 +1,4 @@
+import { v4 as uuid } from "uuid";
 import LoginPage from "../support/pages/LoginPage";
 import Masthead from "../support/pages/admin-ui/Masthead";
 import ListingPage, {
@@ -75,7 +76,9 @@ describe("Client Scopes test", () => {
 
     it("should filter item by name", () => {
       const itemName = clientScopeName + 0;
+
       listingPage
+        .checkEmptySearch()
         .searchItem(itemName, false)
         .itemsEqualTo(1)
         .itemExist(itemName, true);
@@ -219,7 +222,7 @@ describe("Client Scopes test", () => {
         .checkModalMessage(modalMessageDeleteConfirmation)
         .confirmModal();
       masthead.checkNotificationMessage(
-        notificationMessageDeletionConfirmation
+        notificationMessageDeletionConfirmation,
       );
       listingPage.checkInSearchBarChangeTypeToButtonIsDisabled();
     });
@@ -234,7 +237,7 @@ describe("Client Scopes test", () => {
         .checkModalMessage(modalMessageDeleteConfirmation)
         .confirmModal();
       masthead.checkNotificationMessage(
-        notificationMessageDeletionConfirmation
+        notificationMessageDeletionConfirmation,
       );
       listingPage.checkInSearchBarChangeTypeToButtonIsDisabled();
     });
@@ -251,7 +254,7 @@ describe("Client Scopes test", () => {
         .checkModalMessage(modalMessageDeleteConfirmation)
         .confirmModal();
       masthead.checkNotificationMessage(
-        notificationMessageDeletionConfirmation
+        notificationMessageDeletionConfirmation,
       );
       listingPage.checkInSearchBarChangeTypeToButtonIsDisabled();
     });
@@ -268,11 +271,15 @@ describe("Client Scopes test", () => {
       sidebarPage.waitForPageLoad();
       listingPage.goToCreateItem();
 
+      createClientScopePage.save_is_disabled(true);
       createClientScopePage.fillClientScopeData("address").save();
 
       masthead.checkNotificationMessage(
-        "Could not create client scope: 'Client Scope address already exists'"
+        "Could not create client scope: 'Client Scope address already exists'",
       );
+
+      createClientScopePage.fillClientScopeData("");
+      createClientScopePage.save_is_disabled(true);
     });
 
     it("hides 'consent text' field when 'display consent' switch is disabled", () => {
@@ -295,7 +302,7 @@ describe("Client Scopes test", () => {
     });
 
     it("Client scope CRUD test", () => {
-      itemId += "_" + crypto.randomUUID();
+      itemId += "_" + uuid();
 
       // Create
       listingPage.itemExist(itemId, false).goToCreateItem();
@@ -455,7 +462,7 @@ describe("Client Scopes test", () => {
 
       mappersTab.addMappersByConfiguration(
         predefinedMapper,
-        predefinedMapperName
+        predefinedMapperName,
       );
       cy.checkA11y();
 

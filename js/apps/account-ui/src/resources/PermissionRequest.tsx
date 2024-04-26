@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { useAlerts } from "ui-shared";
 import { fetchPermission, updateRequest } from "../api";
 import { Permission, Resource } from "../api/representations";
+import { useEnvironment } from "../root/KeycloakContext";
 
 type PermissionRequestProps = {
   resource: Resource;
@@ -32,6 +33,7 @@ export const PermissionRequest = ({
   refresh,
 }: PermissionRequestProps) => {
   const { t } = useTranslation();
+  const context = useEnvironment();
   const { addAlert, addError } = useAlerts();
 
   const [open, setOpen] = useState(false);
@@ -40,20 +42,21 @@ export const PermissionRequest = ({
 
   const approveDeny = async (
     shareRequest: Permission,
-    approve: boolean = false
+    approve: boolean = false,
   ) => {
     try {
-      const permissions = await fetchPermission({}, resource._id);
+      const permissions = await fetchPermission({ context }, resource._id);
       const { scopes, username } = permissions.find(
-        (p) => p.username === shareRequest.username
-      )!;
+        (p) => p.username === shareRequest.username,
+      ) || { scopes: [], username: shareRequest.username };
 
       await updateRequest(
+        context,
         resource._id,
         username,
         approve
           ? [...(scopes as string[]), ...(shareRequest.scopes as string[])]
-          : scopes
+          : scopes,
       );
       addAlert(t("shareSuccess"));
       toggle();
@@ -67,10 +70,10 @@ export const PermissionRequest = ({
     <>
       <Button variant="link" onClick={toggle}>
         <UserCheckIcon size="lg" />
-        <Badge>{resource.shareRequests.length}</Badge>
+        <Badge>{resource.shareRequests?.length}</Badge>
       </Button>
       <Modal
-        title={t("permissionRequest", [resource.name])}
+        title={t("permissionRequest", { name: resource.name })}
         variant={ModalVariant.large}
         isOpen={open}
         onClose={toggle}
@@ -85,11 +88,11 @@ export const PermissionRequest = ({
             <Tr>
               <Th>{t("requestor")}</Th>
               <Th>{t("permissionRequests")}</Th>
-              <Th></Th>
+              <Th aria-hidden="true"></Th>
             </Tr>
           </Thead>
           <Tbody>
-            {resource.shareRequests.map((shareRequest) => (
+            {resource.shareRequests?.map((shareRequest) => (
               <Tr key={shareRequest.username}>
                 <Td>
                   {shareRequest.firstName} {shareRequest.lastName}{" "}
@@ -119,7 +122,7 @@ export const PermissionRequest = ({
                     className="pf-u-ml-sm"
                     variant="danger"
                   >
-                    {t("doDeny")}
+                    {t("deny")}
                   </Button>
                 </Td>
               </Tr>

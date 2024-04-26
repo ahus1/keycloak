@@ -43,12 +43,12 @@ import org.keycloak.timer.TimerProvider;
 import org.keycloak.transaction.JtaTransactionManagerLookup;
 
 import javax.naming.InitialContext;
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.SynchronizationType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.SynchronizationType;
 import javax.sql.DataSource;
-import javax.transaction.TransactionManager;
-import javax.transaction.UserTransaction;
+import jakarta.transaction.TransactionManager;
+import jakarta.transaction.UserTransaction;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -59,6 +59,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import liquibase.GlobalConfiguration;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
@@ -170,9 +171,9 @@ public class DefaultJpaConnectionProviderFactory implements JpaConnectionProvide
                         String dataSource = config.get("dataSource");
                         if (dataSource != null) {
                             if (config.getBoolean("jta", jtaEnabled)) {
-                                properties.put(AvailableSettings.JPA_JTA_DATASOURCE, dataSource);
+                                properties.put(AvailableSettings.JAKARTA_JTA_DATASOURCE, dataSource);
                             } else {
-                                properties.put(AvailableSettings.JPA_NON_JTA_DATASOURCE, dataSource);
+                                properties.put(AvailableSettings.JAKARTA_NON_JTA_DATASOURCE, dataSource);
                             }
                         } else {
                             String url = config.get("url");
@@ -180,16 +181,16 @@ public class DefaultJpaConnectionProviderFactory implements JpaConnectionProvide
                             if (driver.equals("org.h2.Driver")) {
                                 url = addH2NonKeywords(url);
                             }
-                            properties.put(AvailableSettings.JPA_JDBC_URL, url);
-                            properties.put(AvailableSettings.JPA_JDBC_DRIVER, driver);
+                            properties.put(AvailableSettings.JAKARTA_JDBC_URL, url);
+                            properties.put(AvailableSettings.JAKARTA_JDBC_DRIVER, driver);
 
                             String user = config.get("user");
                             if (user != null) {
-                                properties.put(AvailableSettings.JPA_JDBC_USER, user);
+                                properties.put(AvailableSettings.JAKARTA_JDBC_USER, user);
                             }
                             String password = config.get("password");
                             if (password != null) {
-                                properties.put(AvailableSettings.JPA_JDBC_PASSWORD, password);
+                                properties.put(AvailableSettings.JAKARTA_JDBC_PASSWORD, password);
                             }
                         }
 
@@ -341,7 +342,7 @@ public class DefaultJpaConnectionProviderFactory implements JpaConnectionProvide
     protected void startGlobalStats(KeycloakSession session, int globalStatsIntervalSecs) {
         logger.debugf("Started Hibernate statistics with the interval %s seconds", globalStatsIntervalSecs);
         TimerProvider timer = session.getProvider(TimerProvider.class);
-        timer.scheduleTask(new HibernateStatsReporter(emf), globalStatsIntervalSecs * 1000, "ReportHibernateGlobalStats");
+        timer.scheduleTask(new HibernateStatsReporter(emf), globalStatsIntervalSecs * 1000);
     }
 
     void migration(MigrationStrategy strategy, boolean initializeEmpty, String schema, File databaseUpdateFile, Connection connection, KeycloakSession session) {
@@ -434,7 +435,12 @@ public class DefaultJpaConnectionProviderFactory implements JpaConnectionProvide
 
     @Override
     public String getSchema() {
-        return config.get("schema");
+        String schema = config.get("schema");
+        if (schema != null && schema.contains("-") && ! Boolean.parseBoolean(System.getProperty(GlobalConfiguration.PRESERVE_SCHEMA_CASE.getKey()))) {
+            System.setProperty(GlobalConfiguration.PRESERVE_SCHEMA_CASE.getKey(), "true");
+            logger.warnf("The passed schema '%s' contains a dash. Setting liquibase config option PRESERVE_SCHEMA_CASE to true. See https://github.com/keycloak/keycloak/issues/20870 for more information.", schema);
+        }
+        return schema;
     }
 
     @Override

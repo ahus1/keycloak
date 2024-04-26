@@ -1,3 +1,4 @@
+import { v4 as uuid } from "uuid";
 import SidebarPage from "../support/pages/admin-ui/SidebarPage";
 import LoginPage from "../support/pages/LoginPage";
 import RealmSettingsPage from "../support/pages/admin-ui/manage/realm_settings/RealmSettingsPage";
@@ -14,7 +15,7 @@ const masthead = new Masthead();
 describe("Realm settings client profiles tab tests", () => {
   const profileName = "Test";
   const editedProfileName = "Edit";
-  const realmName = "Realm_" + crypto.randomUUID();
+  const realmName = "Realm_" + uuid();
   const realmSettingsPage = new RealmSettingsPage(realmName);
 
   beforeEach(() => {
@@ -57,6 +58,17 @@ describe("Realm settings client profiles tab tests", () => {
     realmSettingsPage.searchClientProfile(profileName);
   });
 
+  it("Should search non-existent client profile", () => {
+    realmSettingsPage.searchNonExistingClientProfile("nonExistentProfile");
+    cy.findByTestId("empty-state").should("be.visible");
+  });
+
+  it("Should navigate to client profile", () => {
+    realmSettingsPage.searchClientProfile(profileName);
+    realmSettingsPage.goToClientProfileByNameLink(profileName);
+    cy.findByTestId("view-header").should("have.text", profileName);
+  });
+
   it("Check navigating between Form View and JSON editor", () => {
     realmSettingsPage.shouldNavigateBetweenFormAndJSONView();
   });
@@ -86,7 +98,7 @@ describe("Realm settings client profiles tab tests", () => {
       .saveClientProfileCreation();
     cy.wait("@save");
     masthead.checkNotificationMessage(
-      "Could not create client profile: 'proposed client profile name duplicated.'"
+      "Could not create client profile: 'proposed client profile name duplicated.'",
     );
   });
 
@@ -157,7 +169,7 @@ describe("Realm settings client profiles tab tests", () => {
       .checkModalMessage(
         "This action will permanently delete the profile " +
           editedProfileName +
-          ". This cannot be undone."
+          ". This cannot be undone.",
       )
       .cancelModal();
     realmSettingsPage.checkElementInList(editedProfileName);

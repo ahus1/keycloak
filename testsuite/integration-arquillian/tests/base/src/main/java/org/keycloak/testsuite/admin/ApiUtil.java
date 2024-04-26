@@ -20,6 +20,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.admin.client.resource.AuthorizationResource;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.ClientScopeResource;
+import org.keycloak.admin.client.resource.GroupResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.RoleResource;
 import org.keycloak.admin.client.resource.UserResource;
@@ -31,16 +32,15 @@ import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-import javax.ws.rs.core.Response.StatusType;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
+import jakarta.ws.rs.core.Response.StatusType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
 import static org.keycloak.representations.idm.CredentialRepresentation.PASSWORD;
 
 /**
@@ -139,7 +139,7 @@ public class ApiUtil {
 
     public static UserRepresentation findUserByUsername(RealmResource realm, String username) {
         UserRepresentation user = null;
-        List<UserRepresentation> ur = realm.users().search(username, null, null, null, 0, -1);
+        List<UserRepresentation> ur = realm.users().search(username, true);
         if (ur.size() == 1) {
             user = ur.get(0);
         }
@@ -256,9 +256,9 @@ public class ApiUtil {
         }
     }
 
-    public static boolean groupContainsSubgroup(GroupRepresentation group, GroupRepresentation subgroup) {
+    public static boolean groupContainsSubgroup(GroupResource groupsResource, GroupRepresentation subgroup) {
         boolean contains = false;
-        for (GroupRepresentation sg : group.getSubGroups()) {
+        for (GroupRepresentation sg : groupsResource.getSubGroups(null,null, true)) {
             if (subgroup.getId().equals(sg.getId())) {
                 contains = true;
                 break;

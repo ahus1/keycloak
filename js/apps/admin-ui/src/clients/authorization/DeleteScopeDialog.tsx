@@ -1,11 +1,11 @@
-import { useTranslation } from "react-i18next";
+import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
 import { Alert, AlertVariant } from "@patternfly/react-core";
+import { useTranslation } from "react-i18next";
 
-import type { PermissionScopeRepresentation } from "./Scopes";
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { ConfirmDialogModal } from "../../components/confirm-dialog/ConfirmDialog";
-import { useAdminClient } from "../../context/auth/AdminClient";
-import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
+import type { PermissionScopeRepresentation } from "./Scopes";
 
 type DeleteScopeDialogProps = {
   clientId: string;
@@ -25,16 +25,15 @@ export const DeleteScopeDialog = ({
   open,
   toggleDialog,
 }: DeleteScopeDialogProps) => {
-  const { t } = useTranslation("clients");
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
 
   return (
     <ConfirmDialogModal
       open={open}
       toggleDialog={toggleDialog}
-      titleKey="clients:deleteScope"
-      continueButtonLabel="clients:confirm"
+      titleKey="deleteScope"
+      continueButtonLabel="confirm"
       onConfirm={async () => {
         try {
           await adminClient.clients.delAuthorizationScope({
@@ -44,7 +43,7 @@ export const DeleteScopeDialog = ({
           addAlert(t("resourceScopeSuccess"), AlertVariant.success);
           refresh();
         } catch (error) {
-          addError("clients:resourceScopeError", error);
+          addError("resourceScopeError", error);
         }
       }}
     >

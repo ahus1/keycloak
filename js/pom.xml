@@ -13,7 +13,7 @@
     <packaging>pom</packaging>
 
     <name>Keycloak JavaScript Parent</name>
-    <description>Parent of all JavaScript related code, sets up Node.js and NPM and installs dependencies for all projects in the workspace.</description>
+    <description>Parent of all JavaScript related code.</description>
 
     <modules>
         <module>apps/account-ui</module>
@@ -21,6 +21,13 @@
         <module>libs/keycloak-admin-client</module>
         <module>libs/keycloak-js</module>
     </modules>
+
+    <properties>
+        <!-- The JavaScript projects use the non-standard 'src' folder for their sources, therefore, name it here explicitly -->
+        <maven.build.cache.input.1>src</maven.build.cache.input.1>
+        <!-- The child projects will package from the 'dist' folder, which is listed as a resource, but isn't a source folder -->
+        <maven.build.cache.exclude.value.1>${project.basedir}/dist</maven.build.cache.exclude.value.1>
+    </properties>
 
     <build>
         <plugins>
@@ -30,21 +37,41 @@
                 <executions>
                     <execution>
                         <goals>
-                            <goal>install-node-and-npm</goal>
+                            <goal>install-node-and-pnpm</goal>
                         </goals>
                     </execution>
                     <execution>
-                        <id>npm-ci</id>
+                        <id>pnpm-install</id>
                         <goals>
-                            <goal>npm</goal>
+                            <goal>pnpm</goal>
                         </goals>
                         <configuration>
-                            <arguments>ci --ignore-scripts</arguments>
+                            <arguments>${pnpm.args.install}</arguments>
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
                 <configuration>
-                    <nodeVersion>${node.version}</nodeVersion>
+                    <followSymLinks>false</followSymLinks>
+                    <filesets>
+                        <fileset>
+                            <directory>${basedir}</directory>
+                            <includes>
+                                <include>**/.wireit/**</include>
+                                <include>**/node_modules/**</include>
+                            </includes>
+                        </fileset>
+                        <!-- include all non-maven projects here as well -->
+                        <fileset>
+                            <directory>apps/keycloak-server</directory>
+                            <includes>
+                                <include>server/**</include>
+                            </includes>
+                        </fileset>
+                    </filesets>
                 </configuration>
             </plugin>
         </plugins>

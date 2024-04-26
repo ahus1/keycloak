@@ -17,23 +17,30 @@
 
 package org.keycloak.quarkus.runtime.cli.command;
 
+import static org.keycloak.config.ClassLoaderOptions.QUARKUS_REMOVED_ARTIFACTS_PROPERTY;
 import static org.keycloak.quarkus.runtime.Environment.getHomePath;
 import static org.keycloak.quarkus.runtime.Environment.isDevMode;
 import static org.keycloak.quarkus.runtime.cli.Picocli.println;
 import static org.keycloak.quarkus.runtime.configuration.ConfigArgsConfigSource.getAllCliArgs;
 
+import org.keycloak.config.ClassLoaderOptions;
 import org.keycloak.config.OptionCategory;
 import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.Messages;
+import org.keycloak.quarkus.runtime.configuration.Configuration;
+import org.keycloak.quarkus.runtime.configuration.MicroProfileConfigProvider;
 
 import io.quarkus.bootstrap.runner.QuarkusEntryPoint;
 import io.quarkus.bootstrap.runner.RunnerClassLoader;
 
 import io.quarkus.runtime.configuration.ProfileManager;
+import io.smallrye.config.ConfigValue;
+import org.keycloak.utils.StringUtil;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
 import java.util.List;
+import java.util.Optional;
 
 @Command(name = Build.NAME,
         header = "Creates a new and optimized server image.",
@@ -67,9 +74,13 @@ public final class Build extends AbstractCommand implements Runnable {
         exitWithErrorIfDevProfileIsSetAndNotStartDev();
 
         System.setProperty("quarkus.launch.rebuild", "true");
+        validateConfig();
+
         println(spec.commandLine(), "Updating the configuration and installing your custom providers, if any. Please wait.");
 
         try {
+            configureBuildClassLoader();
+
             beforeReaugmentationOnWindows();
             QuarkusEntryPoint.main();
 
@@ -84,11 +95,19 @@ public final class Build extends AbstractCommand implements Runnable {
         }
     }
 
+    private static void configureBuildClassLoader() {
+        // ignored artifacts must be set prior to starting re-augmentation
+        Optional.ofNullable(Configuration.getCurrentBuiltTimeProperty(QUARKUS_REMOVED_ARTIFACTS_PROPERTY))
+                .map(ConfigValue::getValue)
+                .ifPresent(s -> System.setProperty(QUARKUS_REMOVED_ARTIFACTS_PROPERTY, s));
+    }
+
     @Override
     public boolean includeBuildTime() {
         return true;
     }
 
+    @Override
     public List<OptionCategory> getOptionCategories() {
         // all options should work for the build command, otherwise re-augmentation might fail due to unknown options
         return super.getOptionCategories();
@@ -119,5 +138,10 @@ public final class Build extends AbstractCommand implements Runnable {
             // only needed for dev/testing purposes
             getHomePath().resolve("quarkus-artifact.properties").toFile().delete();
         }
+    }
+
+    @Override
+    public String getName() {
+        return NAME;
     }
 }

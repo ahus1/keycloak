@@ -1,27 +1,29 @@
-import { useTranslation } from "react-i18next";
-import { FormProvider, useForm } from "react-hook-form";
-import { Button, Modal, Form } from "@patternfly/react-core";
-import { saveAs } from "file-saver";
-
 import KeyStoreConfig from "@keycloak/keycloak-admin-client/lib/defs/keystoreConfig";
-import { KeyForm, getFileExtension } from "./GenerateKeyDialog";
-import { useRealm } from "../../context/realm-context/RealmContext";
-import { useAdminClient } from "../../context/auth/AdminClient";
+import { Button, Form, Modal } from "@patternfly/react-core";
+import { saveAs } from "file-saver";
+import { FormProvider, useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
+
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
+import { useRealm } from "../../context/realm-context/RealmContext";
+import { KeyForm, getFileExtension } from "./GenerateKeyDialog";
+import { KeyTypes } from "./SamlKeys";
 
 type ExportSamlKeyDialogProps = {
   clientId: string;
   close: () => void;
+  keyType: KeyTypes;
 };
 
 export const ExportSamlKeyDialog = ({
   clientId,
   close,
+  keyType,
 }: ExportSamlKeyDialogProps) => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { realm } = useRealm();
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const form = useForm<KeyStoreConfig>({
@@ -33,18 +35,18 @@ export const ExportSamlKeyDialog = ({
       const keyStore = await adminClient.clients.downloadKey(
         {
           id: clientId,
-          attr: "saml.signing",
+          attr: keyType,
         },
-        config
+        config,
       );
       saveAs(
         new Blob([keyStore], { type: "application/octet-stream" }),
-        `keystore.${getFileExtension(config.format ?? "")}`
+        `keystore.${getFileExtension(config.format ?? "")}`,
       );
       addAlert(t("samlKeysExportSuccess"));
       close();
     } catch (error) {
-      addError("clients:samlKeysExportError", error);
+      addError("samlKeysExportError", error);
     }
   };
 
@@ -62,7 +64,7 @@ export const ExportSamlKeyDialog = ({
           type="submit"
           form="export-saml-key-form"
         >
-          {t("common:export")}
+          {t("export")}
         </Button>,
         <Button
           id="modal-cancel"
@@ -73,7 +75,7 @@ export const ExportSamlKeyDialog = ({
             close();
           }}
         >
-          {t("common:cancel")}
+          {t("cancel")}
         </Button>,
       ]}
     >

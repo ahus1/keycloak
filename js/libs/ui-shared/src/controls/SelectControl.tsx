@@ -11,18 +11,19 @@ import {
   Select,
   SelectOption,
   SelectProps,
+  SelectVariant,
   ValidatedOptions,
 } from "@patternfly/react-core";
 import { FormLabel } from "./FormLabel";
 
-type Option = {
+export type SelectControlOption = {
   key: string;
   value: string;
 };
 
 export type SelectControlProps<
   T extends FieldValues,
-  P extends FieldPath<T> = FieldPath<T>
+  P extends FieldPath<T> = FieldPath<T>,
 > = Omit<
   SelectProps,
   "name" | "onToggle" | "selections" | "onSelect" | "onClear" | "isOpen"
@@ -30,18 +31,21 @@ export type SelectControlProps<
   UseControllerProps<T, P> & {
     name: string;
     label?: string;
-    options: string[] | Option[];
+    options: string[] | SelectControlOption[];
+    labelIcon?: string;
     controller: Omit<ControllerProps, "name" | "render">;
   };
 
 export const SelectControl = <
   T extends FieldValues,
-  P extends FieldPath<T> = FieldPath<T>
+  P extends FieldPath<T> = FieldPath<T>,
 >({
   name,
   label,
   options,
   controller,
+  variant,
+  labelIcon,
   ...rest
 }: SelectControlProps<T, P>) => {
   const {
@@ -55,6 +59,7 @@ export const SelectControl = <
       label={label}
       isRequired={controller.rules?.required === true}
       error={errors[name]}
+      labelIcon={labelIcon}
     >
       <Controller
         {...controller}
@@ -63,22 +68,38 @@ export const SelectControl = <
         render={({ field: { onChange, value } }) => (
           <Select
             {...rest}
-            toggleId={name}
+            toggleId={name.slice(name.lastIndexOf(".") + 1)}
             onToggle={(isOpen) => setOpen(isOpen)}
-            selections={value}
+            selections={
+              typeof options[0] !== "string"
+                ? (options as SelectControlOption[])
+                    .filter((o) => value.includes(o.key))
+                    .map((o) => o.value)
+                : value
+            }
             onSelect={(_, v) => {
-              const option = v.toString();
-              if (value.includes(option)) {
-                onChange(value.filter((item: string) => item !== option));
+              if (variant === "typeaheadmulti") {
+                const option = v.toString();
+                if (value.includes(option)) {
+                  onChange(value.filter((item: string) => item !== option));
+                } else {
+                  onChange([...value, option]);
+                }
               } else {
-                onChange([...value, option]);
+                onChange(v);
+                setOpen(false);
               }
             }}
-            onClear={(event) => {
-              event.stopPropagation();
-              onChange([]);
-            }}
+            onClear={
+              variant !== SelectVariant.single
+                ? (event) => {
+                    event.stopPropagation();
+                    onChange([]);
+                  }
+                : undefined
+            }
             isOpen={open}
+            variant={variant}
             validated={
               errors[name] ? ValidatedOptions.error : ValidatedOptions.default
             }

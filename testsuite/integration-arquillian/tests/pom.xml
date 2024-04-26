@@ -125,7 +125,7 @@
         <app.server.2.debug.suspend>n</app.server.2.debug.suspend>
         <app.server.2.jboss.jvm.debug.args>-agentlib:jdwp=transport=dt_socket,server=y,suspend=${app.server.2.debug.suspend},address=localhost:${app.server.2.debug.port}</app.server.2.jboss.jvm.debug.args>
         <app.server.memory.Xms>64m</app.server.memory.Xms>
-        <app.server.memory.Xmx>512m</app.server.memory.Xmx>
+        <app.server.memory.Xmx>768m</app.server.memory.Xmx>
         <app.server.memory.settings>-Xms${app.server.memory.Xms} -Xmx${app.server.memory.Xmx} -XX:MetaspaceSize=${surefire.memory.metaspace} -XX:MaxMetaspaceSize=${surefire.memory.metaspace.max}</app.server.memory.settings>
         <app.server.ssl.required>false</app.server.ssl.required>
         <app.server.truststore>${app.server.keystore.dir}/keycloak.truststore</app.server.truststore>
@@ -215,7 +215,7 @@
         <github.secretToken/>
         <ieDriverArch>Win32</ieDriverArch>
         <ieDriverVersion/>
-        <js.browser>phantomjs</js.browser>
+        <js.browser>chrome</js.browser>
         <js.chromeArguments>--headless</js.chromeArguments>
         <htmlUnitBrowserVersion>chrome</htmlUnitBrowserVersion>
         <firefox_binary/> <!-- the path is set automatically based on the OS -->
@@ -345,18 +345,6 @@
                                     <artifactItem>
                                         <groupId>org.keycloak.testsuite</groupId>
                                         <artifactId>hello-world-authz-service</artifactId>
-                                        <version>${project.version}</version>
-                                        <type>war</type>
-                                    </artifactItem>
-                                    <artifactItem>
-                                        <groupId>org.keycloak.testsuite</groupId>
-                                        <artifactId>photoz-html5-client</artifactId>
-                                        <version>${project.version}</version>
-                                        <type>war</type>
-                                    </artifactItem>
-                                    <artifactItem>
-                                        <groupId>org.keycloak.testsuite</groupId>
-                                        <artifactId>photoz-restful-api</artifactId>
                                         <version>${project.version}</version>
                                         <type>war</type>
                                     </artifactItem>
@@ -1616,6 +1604,12 @@
                 </dependency>
 
                 <dependency>
+                    <groupId>net.bytebuddy</groupId>
+                    <artifactId>byte-buddy</artifactId>
+                    <version>1.12.18</version>
+                </dependency>
+
+                <dependency>
                     <groupId>org.jboss.arquillian.junit</groupId>
                     <artifactId>arquillian-junit-container</artifactId>
                 </dependency>
@@ -1680,12 +1674,6 @@
 
                 <dependency>
                     <groupId>org.keycloak.testsuite</groupId>
-                    <artifactId>integration-arquillian-test-apps-servlets</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-
-                <dependency>
-                    <groupId>org.keycloak.testsuite</groupId>
                     <artifactId>integration-arquillian-util</artifactId>
                     <version>${project.version}</version>
                 </dependency>
@@ -1706,7 +1694,7 @@
                 </dependency>
                 <dependency>
                     <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
+                    <artifactId>slf4j-reload4j</artifactId>
                 </dependency>
 
                 <dependency>
@@ -1816,19 +1804,20 @@
 
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcprov-jdk15on</artifactId>
+                    <artifactId>bcprov-jdk18on</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>org.bouncycastle</groupId>
-                    <artifactId>bcpkix-jdk15on</artifactId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>org.hamcrest</groupId>
                     <artifactId>hamcrest</artifactId>
+                    <scope>test</scope>
                 </dependency>
                 <dependency>
                     <groupId>org.infinispan</groupId>
-                    <artifactId>infinispan-core</artifactId>
+                    <artifactId>infinispan-core-jakarta</artifactId>
                 </dependency>
 
                 <dependency>
@@ -1836,6 +1825,13 @@
                     <artifactId>${jdbc.mvn.artifactId}</artifactId>
                     <version>${jdbc.mvn.version}</version>
                     <scope>compile</scope>
+                </dependency>
+
+                <!-- OpenJDK 17 and further versions doesn't provide Nashorn library out of the box. -->
+                <dependency>
+                    <groupId>org.openjdk.nashorn</groupId>
+                    <artifactId>nashorn-core</artifactId>
+                    <version>${nashorn.version}</version>
                 </dependency>
 
                 <!-- CLI -->
@@ -1854,6 +1850,13 @@
                         </exclusion>
                     </exclusions>
                     <type>zip</type>
+                </dependency>
+
+                <!-- Fuse adapter dependency -->
+                <dependency>
+                    <groupId>org.osgi</groupId>
+                    <artifactId>org.osgi.enterprise</artifactId>
+                    <scope>provided</scope>
                 </dependency>
 
                 <!-- Needed for infinispan statistics -->
@@ -1938,6 +1941,40 @@
             <properties>
                 <app.server.memory.settings>-Xms${app.server.memory.Xms} -Xmx${app.server.memory.Xmx} -XX:PermSize=${surefire.memory.metaspace} -XX:MaxPermSize=${surefire.memory.metaspace.max}</app.server.memory.settings>
             </properties>
+        </profile>
+
+        <profile>
+            <id>app-server-eap8</id>
+            <activation>
+                <property>
+                    <name>app.server</name>
+                    <value>eap8</value>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.keycloak.testsuite</groupId>
+                    <artifactId>integration-arquillian-test-apps-servlets-jakarta</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <profile>
+            <id>not-app-server-eap8</id>
+            <activation>
+                <property>
+                    <name>app.server</name>
+                    <value>!eap8</value>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.keycloak.testsuite</groupId>
+                    <artifactId>integration-arquillian-test-apps-servlets</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
         </profile>
 
         <profile>

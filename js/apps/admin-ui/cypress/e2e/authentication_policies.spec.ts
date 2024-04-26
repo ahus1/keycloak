@@ -12,6 +12,7 @@ describe("Policies", () => {
 
   describe("OTP policies tab", () => {
     const otpPoliciesPage = new OTPPolicies();
+
     beforeEach(() => {
       loginPage.logIn();
       keycloakBefore();
@@ -23,7 +24,7 @@ describe("Policies", () => {
       otpPoliciesPage.checkSupportedApplications(
         "FreeOTP",
         "Google Authenticator",
-        "Microsoft Authenticator"
+        "Microsoft Authenticator",
       );
       otpPoliciesPage.setPolicyType("hotp").increaseInitialCounter().save();
       masthead.checkNotificationMessage("OTP policy successfully updated");
@@ -33,6 +34,7 @@ describe("Policies", () => {
 
   describe("Webauthn policies tabs", () => {
     const webauthnPage = new WebAuthnPolicies();
+
     beforeEach(() => {
       loginPage.logIn();
       keycloakBefore();
@@ -48,7 +50,7 @@ describe("Policies", () => {
       });
       webauthnPage.webAuthnPolicyCreateTimeout(30).save();
       masthead.checkNotificationMessage(
-        "Updated webauthn policies successfully"
+        "Updated webauthn policies successfully",
       );
     });
 
@@ -61,11 +63,11 @@ describe("Policies", () => {
             webAuthnPolicyRequireResidentKey: "Yes",
             webAuthnPolicyUserVerificationRequirement: "Preferred",
           },
-          true
+          true,
         )
         .save();
       masthead.checkNotificationMessage(
-        "Updated webauthn policies successfully"
+        "Updated webauthn policies successfully",
       );
     });
   });

@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
+import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
 import {
   Button,
   DescriptionList,
@@ -16,26 +15,28 @@ import {
   Thead,
   Tr,
 } from "@patternfly/react-table";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Link, useNavigate } from "react-router-dom";
 
-import type ScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/scopeRepresentation";
-import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
-
+import { adminClient } from "../../admin-client";
 import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
-import { useRealm } from "../../context/realm-context/RealmContext";
-import { toScopeDetails } from "../routes/Scope";
-import { toNewScope } from "../routes/NewScope";
 import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
+import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
+import { useRealm } from "../../context/realm-context/RealmContext";
+import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
+import { toNewPermission } from "../routes/NewPermission";
+import { toNewScope } from "../routes/NewScope";
+import { toPermissionDetails } from "../routes/PermissionDetails";
+import { toResourceDetails } from "../routes/Resource";
+import { toScopeDetails } from "../routes/Scope";
 import { DeleteScopeDialog } from "./DeleteScopeDialog";
 import { DetailDescriptionLink } from "./DetailDescription";
-import { toNewPermission } from "../routes/NewPermission";
-import { toResourceDetails } from "../routes/Resource";
-import { toPermissionDetails } from "../routes/PermissionDetails";
 
 type ScopesProps = {
   clientId: string;
+  isDisabled?: boolean;
 };
 
 export type PermissionScopeRepresentation = ScopeRepresentation & {
@@ -48,10 +49,12 @@ type ExpandableRow = {
   isExpanded: boolean;
 };
 
-export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
-  const { t } = useTranslation("clients");
+export const AuthorizationScopes = ({
+  clientId,
+  isDisabled = false,
+}: ScopesProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
 
   const [deleteDialog, toggleDeleteDialog] = useToggle();
@@ -84,7 +87,7 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
       setScopes(scopes.map((s) => ({ ...s, isLoaded: false })));
       setCollapsed(scopes.map((s) => ({ id: s.id!, isExpanded: false })));
     },
-    [key, search, first, max]
+    [key, search, first, max],
   );
 
   const getScope = (id: string) => scopes?.find((scope) => scope.id === id)!;
@@ -117,14 +120,14 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
             permissions,
             isLoaded: true,
           };
-        })
+        }),
       );
     },
     (resourcesScopes) => {
       let result = [...(scopes || [])];
       resourcesScopes.forEach((resourceScope) => {
         const index = scopes?.findIndex(
-          (scope) => resourceScope.id === scope.id
+          (scope) => resourceScope.id === scope.id,
         )!;
         result = [
           ...result.slice(0, index),
@@ -135,7 +138,7 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
 
       setScopes(result);
     },
-    [collapsed]
+    [collapsed],
   );
 
   if (!scopes) {
@@ -184,11 +187,11 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
             <TableComposable aria-label={t("scopes")} variant="compact">
               <Thead>
                 <Tr>
-                  <Th />
-                  <Th>{t("common:name")}</Th>
+                  <Th aria-hidden="true" />
+                  <Th>{t("name")}</Th>
                   <Th>{t("displayName")}</Th>
-                  <Th />
-                  <Th />
+                  <Th aria-hidden="true" />
+                  <Th aria-hidden="true" />
                 </Tr>
               </Thead>
               {scopes.map((scope, rowIndex) => (
@@ -242,7 +245,7 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
                       actions={{
                         items: [
                           {
-                            title: t("common:delete"),
+                            title: t("delete"),
                             onClick: () => {
                               setSelectedScope(scope);
                               toggleDeleteDialog();
@@ -306,6 +309,7 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
         <ListEmptyState
           message={t("emptyAuthorizationScopes")}
           instructions={t("emptyAuthorizationInstructions")}
+          isDisabled={isDisabled}
           onPrimaryAction={() => navigate(toNewScope({ id: clientId, realm }))}
           primaryActionText={t("createAuthorizationScope")}
         />
@@ -313,8 +317,9 @@ export const AuthorizationScopes = ({ clientId }: ScopesProps) => {
       {noData && searching && (
         <ListEmptyState
           isSearchVariant
-          message={t("common:noSearchResults")}
-          instructions={t("common:noSearchResultsInstructions")}
+          isDisabled={isDisabled}
+          message={t("noSearchResults")}
+          instructions={t("noSearchResultsInstructions")}
         />
       )}
     </PageSection>

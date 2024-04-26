@@ -1,17 +1,16 @@
 import { PageSection } from "@patternfly/react-core";
 import { useTranslation } from "react-i18next";
 
-import { useAdminClient } from "../context/auth/AdminClient";
+import { adminClient } from "../admin-client";
 import { useRealm } from "../context/realm-context/RealmContext";
 import SessionsTable from "../sessions/SessionsTable";
 import { useParams } from "../utils/useParams";
 import type { UserParams } from "./routes/User";
 
 export const UserSessions = () => {
-  const { adminClient } = useAdminClient();
   const { id } = useParams<UserParams>();
   const { realm } = useRealm();
-  const { t } = useTranslation("sessions");
+  const { t } = useTranslation();
 
   const loader = () => adminClient.users.listSessions({ id, realm });
 

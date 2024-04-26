@@ -18,11 +18,9 @@
 package org.keycloak.models.utils;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -57,6 +55,7 @@ import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.common.util.UriUtils;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.credential.CredentialModel;
+import org.keycloak.deployment.DeployedConfigurationsManager;
 import org.keycloak.migration.migrators.MigrationUtils;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -68,6 +67,7 @@ import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelException;
 import org.keycloak.models.ProtocolMapperModel;
@@ -99,7 +99,6 @@ import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.RolesRepresentation;
-import org.keycloak.representations.idm.SocialLinkRepresentation;
 import org.keycloak.representations.idm.UserConsentRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.representations.idm.authorization.AbstractPolicyRepresentation;
@@ -123,7 +122,13 @@ public class RepresentationToModel {
 
 
     public static void importRealm(KeycloakSession session, RealmRepresentation rep, RealmModel newRealm, boolean skipUserDependent) {
-        session.getProvider(DatastoreProvider.class).getExportImportManager().importRealm(rep, newRealm, skipUserDependent);
+        KeycloakContext context = session.getContext();
+        try {
+            context.setRealm(newRealm);
+            session.getProvider(DatastoreProvider.class).getExportImportManager().importRealm(rep, newRealm, skipUserDependent);
+        } finally {
+            context.setRealm(null);
+        }
     }
 
     public static void importRoles(RolesRepresentation realmRoles, RealmModel realm) {
@@ -230,7 +235,7 @@ public class RepresentationToModel {
                             cred.setSecretData("{\"value\":\"" + cred.getHashedSaltedValue() + "\",\"salt\":\"" + cred.getSalt() + "\"}");
                             cred.setPriority(10);
                         } else if (OTPCredentialModel.TOTP.equals(cred.getType()) || OTPCredentialModel.HOTP.equals(cred.getType())) {
-                            OTPCredentialData credentialData = new OTPCredentialData(cred.getType(), cred.getDigits(), cred.getCounter(), cred.getPeriod(), cred.getAlgorithm());
+                            OTPCredentialData credentialData = new OTPCredentialData(cred.getType(), cred.getDigits(), cred.getCounter(), cred.getPeriod(), cred.getAlgorithm(), null);
                             OTPSecretData secretData = new OTPSecretData(cred.getHashedSaltedValue());
                             cred.setCredentialData(JsonSerialization.writeValueAsString(credentialData));
                             cred.setSecretData(JsonSerialization.writeValueAsString(secretData));
@@ -459,28 +464,7 @@ public class RepresentationToModel {
             addClientScopeToClient(realm, client, clientTemplateName, true);
         }
 
-        if (resourceRep.getDefaultClientScopes() != null || resourceRep.getOptionalClientScopes() != null) {
-            // First remove all default/built in client scopes
-            for (ClientScopeModel clientScope : client.getClientScopes(true).values()) {
-                client.removeClientScope(clientScope);
-            }
-
-            // First remove all default/built in client scopes
-            for (ClientScopeModel clientScope : client.getClientScopes(false).values()) {
-                client.removeClientScope(clientScope);
-            }
-        }
-
-        if (resourceRep.getDefaultClientScopes() != null) {
-            for (String clientScopeName : resourceRep.getDefaultClientScopes()) {
-                addClientScopeToClient(realm, client, clientScopeName, true);
-            }
-        }
-        if (resourceRep.getOptionalClientScopes() != null) {
-            for (String clientScopeName : resourceRep.getOptionalClientScopes()) {
-                addClientScopeToClient(realm, client, clientScopeName, false);
-            }
-        }
+        updateClientScopes(resourceRep, client);
 
         if (resourceRep.isFullScopeAllowed() != null) {
             client.setFullScopeAllowed(resourceRep.isFullScopeAllowed());
@@ -651,6 +635,31 @@ public class RepresentationToModel {
             }
         }
     }
+    
+    public static void updateClientScopes(ClientRepresentation resourceRep, ClientModel client) {
+        if (resourceRep.getDefaultClientScopes() != null || resourceRep.getOptionalClientScopes() != null) {
+            // First remove all default/built in client scopes
+            for (ClientScopeModel clientScope : client.getClientScopes(true).values()) {
+                client.removeClientScope(clientScope);
+            }
+
+            // First remove all default/built in client scopes
+            for (ClientScopeModel clientScope : client.getClientScopes(false).values()) {
+                client.removeClientScope(clientScope);
+            }
+        }
+
+        if (resourceRep.getDefaultClientScopes() != null) {
+            for (String clientScopeName : resourceRep.getDefaultClientScopes()) {
+                addClientScopeToClient(client.getRealm(), client, clientScopeName, true);
+            }
+        }
+        if (resourceRep.getOptionalClientScopes() != null) {
+            for (String clientScopeName : resourceRep.getOptionalClientScopes()) {
+                addClientScopeToClient(client.getRealm(), client, clientScopeName, false);
+            }
+        }
+    }
 
     private static String generateProtocolNameKey(String protocol, String name) {
         return String.format("%s%%%s", protocol, name);
@@ -710,10 +719,10 @@ public class RepresentationToModel {
         return session.getProvider(DatastoreProvider.class).getExportImportManager().createUser(newRealm, userRep);
     }
 
-    public static void createGroups(UserRepresentation userRep, RealmModel newRealm, UserModel user) {
+    public static void createGroups(KeycloakSession session, UserRepresentation userRep, RealmModel newRealm, UserModel user) {
         if (userRep.getGroups() != null) {
             for (String path : userRep.getGroups()) {
-                GroupModel group = KeycloakModelUtils.findGroupByPath(newRealm, path);
+                GroupModel group = KeycloakModelUtils.findGroupByPath(session, newRealm, path);
                 if (group == null) {
                     throw new RuntimeException("Unable to find group specified by path: " + path);
 
@@ -833,21 +842,21 @@ public class RepresentationToModel {
         identityProviderModel.setConfig(removeEmptyString(representation.getConfig()));
 
         String flowAlias = representation.getFirstBrokerLoginFlowAlias();
-        if (flowAlias == null) {
-            flowAlias = DefaultAuthenticationFlows.FIRST_BROKER_LOGIN_FLOW;
+        if (flowAlias == null || flowAlias.trim().length() == 0) {
+            identityProviderModel.setFirstBrokerLoginFlowId(null);
+        } else {
+            AuthenticationFlowModel flowModel = realm.getFlowByAlias(flowAlias);
+            if (flowModel == null) {
+                throw new ModelException("No available authentication flow with alias: " + flowAlias);
+            }
+            identityProviderModel.setFirstBrokerLoginFlowId(flowModel.getId());
         }
-
-        AuthenticationFlowModel flowModel = realm.getFlowByAlias(flowAlias);
-        if (flowModel == null) {
-            throw new ModelException("No available authentication flow with alias: " + flowAlias);
-        }
-        identityProviderModel.setFirstBrokerLoginFlowId(flowModel.getId());
 
         flowAlias = representation.getPostBrokerLoginFlowAlias();
         if (flowAlias == null || flowAlias.trim().length() == 0) {
             identityProviderModel.setPostBrokerLoginFlowId(null);
         } else {
-            flowModel = realm.getFlowByAlias(flowAlias);
+            AuthenticationFlowModel flowModel = realm.getFlowByAlias(flowAlias);
             if (flowModel == null) {
                 throw new ModelException("No available authentication flow with alias: " + flowAlias);
             }
@@ -926,7 +935,7 @@ public class RepresentationToModel {
     }
 
 
-    public static AuthenticationExecutionModel toModel(RealmModel realm, AuthenticationExecutionRepresentation rep) {
+    public static AuthenticationExecutionModel toModel(KeycloakSession session, RealmModel realm, AuthenticationExecutionRepresentation rep) {
         AuthenticationExecutionModel model = new AuthenticationExecutionModel();
         model.setId(rep.getId());
         model.setFlowId(rep.getFlowId());
@@ -938,7 +947,7 @@ public class RepresentationToModel {
         model.setRequirement(AuthenticationExecutionModel.Requirement.valueOf(rep.getRequirement()));
 
         if (rep.getAuthenticatorConfig() != null) {
-            AuthenticatorConfigModel cfg = realm.getAuthenticatorConfigByAlias(rep.getAuthenticatorConfig());
+            AuthenticatorConfigModel cfg = new DeployedConfigurationsManager(session).getAuthenticatorConfigByAlias(realm, rep.getAuthenticatorConfig());
             model.setAuthenticatorConfig(cfg.getId());
         }
         return model;
@@ -1115,7 +1124,6 @@ public class RepresentationToModel {
 
     private static Policy importPolicies(AuthorizationProvider authorization, ResourceServer resourceServer, List<PolicyRepresentation> policiesToImport, String parentPolicyName) {
         StoreFactory storeFactory = authorization.getStoreFactory();
-        RealmModel realm = resourceServer.getRealm();
 
         for (PolicyRepresentation policyRepresentation : policiesToImport) {
             if (parentPolicyName != null && !parentPolicyName.equals(policyRepresentation.getName())) {
@@ -1135,7 +1143,7 @@ public class RepresentationToModel {
                         Policy policy = policyStore.findByName(resourceServer, policyName);
 
                         if (policy == null) {
-                            policy = policyStore.findById(realm, resourceServer, policyName);
+                            policy = policyStore.findById(resourceServer, policyName);
                         }
 
                         if (policy == null) {
@@ -1155,7 +1163,7 @@ public class RepresentationToModel {
             }
 
             PolicyStore policyStore = storeFactory.getPolicyStore();
-            Policy policy = policyStore.findById(realm, resourceServer, policyRepresentation.getId());
+            Policy policy = policyStore.findById(resourceServer, policyRepresentation.getId());
 
             if (policy == null) {
                 policy = policyStore.findByName(resourceServer, policyRepresentation.getName());
@@ -1236,7 +1244,7 @@ public class RepresentationToModel {
         PolicyProviderFactory provider = authorization.getProviderFactory(model.getType());
 
         if (provider == null) {
-            throw new RuntimeException("Could find policy provider with type [" + model.getType() + "]");
+            throw new RuntimeException("Couldn't find policy provider with type [" + model.getType() + "]");
         }
 
         if (representation instanceof PolicyRepresentation) {
@@ -1262,7 +1270,6 @@ public class RepresentationToModel {
                 return;
             }
             ResourceServer resourceServer = policy.getResourceServer();
-            RealmModel realm = resourceServer.getRealm();
             for (String scopeId : scopeIds) {
                 boolean hasScope = false;
 
@@ -1272,7 +1279,7 @@ public class RepresentationToModel {
                     }
                 }
                 if (!hasScope) {
-                    Scope scope = storeFactory.getScopeStore().findById(realm, resourceServer, scopeId);
+                    Scope scope = storeFactory.getScopeStore().findById(resourceServer, scopeId);
 
                     if (scope == null) {
                         scope = storeFactory.getScopeStore().findByName(resourceServer, scopeId);
@@ -1304,7 +1311,6 @@ public class RepresentationToModel {
 
     private static void updateAssociatedPolicies(Set<String> policyIds, Policy policy, StoreFactory storeFactory) {
         ResourceServer resourceServer = policy.getResourceServer();
-        RealmModel realm = resourceServer.getRealm();
 
         if (policyIds != null) {
             if (policyIds.isEmpty()) {
@@ -1326,7 +1332,7 @@ public class RepresentationToModel {
                 }
 
                 if (!hasPolicy) {
-                    Policy associatedPolicy = policyStore.findById(realm, resourceServer, policyId);
+                    Policy associatedPolicy = policyStore.findById(resourceServer, policyId);
 
                     if (associatedPolicy == null) {
                         associatedPolicy = policyStore.findByName(resourceServer, policyId);
@@ -1364,7 +1370,6 @@ public class RepresentationToModel {
                 }
             }
             ResourceServer resourceServer = policy.getResourceServer();
-            RealmModel realm = resourceServer.getRealm();
 
             for (String resourceId : resourceIds) {
                 boolean hasResource = false;
@@ -1374,7 +1379,7 @@ public class RepresentationToModel {
                     }
                 }
                 if (!hasResource && !"".equals(resourceId)) {
-                    Resource resource = storeFactory.getResourceStore().findById(realm, resourceServer, resourceId);
+                    Resource resource = storeFactory.getResourceStore().findById(resourceServer, resourceId);
 
                     if (resource == null) {
                         resource = storeFactory.getResourceStore().findByName(resourceServer, resourceId);
@@ -1440,7 +1445,7 @@ public class RepresentationToModel {
         Resource existing;
 
         if (resource.getId() != null) {
-            existing = resourceStore.findById(realm, resourceServer, resource.getId());
+            existing = resourceStore.findById(resourceServer, resource.getId());
         } else {
             existing = resourceStore.findByName(resourceServer, resource.getName(), ownerId);
         }
@@ -1514,7 +1519,7 @@ public class RepresentationToModel {
         Scope existing;
 
         if (scope.getId() != null) {
-            existing = scopeStore.findById(resourceServer.getRealm(), resourceServer, scope.getId());
+            existing = scopeStore.findById(resourceServer, scope.getId());
         } else {
             existing = scopeStore.findByName(resourceServer, scope.getName());
         }
@@ -1540,13 +1545,13 @@ public class RepresentationToModel {
 
     public static PermissionTicket toModel(PermissionTicketRepresentation representation, ResourceServer resourceServer, AuthorizationProvider authorization) {
         PermissionTicketStore ticketStore = authorization.getStoreFactory().getPermissionTicketStore();
-        PermissionTicket ticket = ticketStore.findById(resourceServer.getRealm(), resourceServer, representation.getId());
+        PermissionTicket ticket = ticketStore.findById(resourceServer, representation.getId());
         boolean granted = representation.isGranted();
 
         if (granted && !ticket.isGranted()) {
             ticket.setGrantedTimestamp(System.currentTimeMillis());
         } else if (!granted) {
-            ticketStore.delete(resourceServer.getRealm(), ticket.getId());
+            ticketStore.delete(ticket.getId());
         }
 
         return ticket;

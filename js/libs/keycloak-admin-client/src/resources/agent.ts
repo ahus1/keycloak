@@ -1,4 +1,3 @@
-import { isUndefined, last, omit, pick } from "lodash-es";
 import urlJoin from "url-join";
 import { parseTemplate } from "url-template";
 import type { KeycloakAdminClient } from "../client.js";
@@ -40,11 +39,21 @@ export interface RequestArgs {
   headers?: HeadersInit;
 }
 
+const pick = (value: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([key]) => keys.includes(key)),
+  );
+
+const omit = (value: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([key]) => !keys.includes(key)),
+  );
+
 export class Agent {
-  private client: KeycloakAdminClient;
-  private basePath: string;
-  private getBaseParams?: () => Record<string, any>;
-  private getBaseUrl?: () => string;
+  #client: KeycloakAdminClient;
+  #basePath: string;
+  #getBaseParams?: () => Record<string, any>;
+  #getBaseUrl?: () => string;
 
   constructor({
     client,
@@ -57,10 +66,10 @@ export class Agent {
     getUrlParams?: () => Record<string, any>;
     getBaseUrl?: () => string;
   }) {
-    this.client = client;
-    this.getBaseParams = getUrlParams;
-    this.getBaseUrl = getBaseUrl;
-    this.basePath = path;
+    this.#client = client;
+    this.#getBaseParams = getUrlParams;
+    this.#getBaseUrl = getBaseUrl;
+    this.#basePath = path;
   }
 
   public request({
@@ -77,35 +86,38 @@ export class Agent {
   }: RequestArgs) {
     return async (
       payload: any = {},
-      options?: Pick<RequestArgs, "catchNotFound">
+      options?: Pick<RequestArgs, "catchNotFound">,
     ) => {
-      const baseParams = this.getBaseParams?.() ?? {};
+      const baseParams = this.#getBaseParams?.() ?? {};
 
       // Filter query parameters by queryParamKeys
-      const queryParams = queryParamKeys
-        ? pick(payload, queryParamKeys)
-        : undefined;
+      const queryParams =
+        queryParamKeys.length > 0
+          ? (pick(payload, queryParamKeys) as any)
+          : undefined;
 
       // Add filtered payload parameters to base parameters
       const allUrlParamKeys = [...Object.keys(baseParams), ...urlParamKeys];
       const urlParams = { ...baseParams, ...pick(payload, allUrlParamKeys) };
 
-      // Omit url parameters and query parameters from payload
-      const omittedKeys = ignoredKeys
-        ? [...allUrlParamKeys, ...queryParamKeys].filter(
-            (key) => !ignoredKeys.includes(key)
-          )
-        : [...allUrlParamKeys, ...queryParamKeys];
+      if (!(payload instanceof FormData)) {
+        // Omit url parameters and query parameters from payload
+        const omittedKeys = ignoredKeys
+          ? [...allUrlParamKeys, ...queryParamKeys].filter(
+              (key) => !ignoredKeys.includes(key),
+            )
+          : [...allUrlParamKeys, ...queryParamKeys];
 
-      payload = omit(payload, omittedKeys);
+        payload = omit(payload, omittedKeys);
+      }
 
       // Transform keys of both payload and queryParams
       if (keyTransform) {
-        this.transformKey(payload, keyTransform);
-        this.transformKey(queryParams, keyTransform);
+        this.#transformKey(payload, keyTransform);
+        this.#transformKey(queryParams, keyTransform);
       }
 
-      return this.requestWithParams({
+      return this.#requestWithParams({
         method,
         path,
         payload,
@@ -113,7 +125,7 @@ export class Agent {
         queryParams,
         // catchNotFound precedence: global > local > default
         catchNotFound,
-        ...(this.client.getGlobalRequestArgOptions() ?? options ?? {}),
+        ...(this.#client.getGlobalRequestArgOptions() ?? options ?? {}),
         payloadKey,
         returnResourceIdInLocationHeader,
         headers,
@@ -133,11 +145,11 @@ export class Agent {
     headers,
   }: RequestArgs) {
     return async (query: any = {}, payload: any = {}) => {
-      const baseParams = this.getBaseParams?.() ?? {};
+      const baseParams = this.#getBaseParams?.() ?? {};
 
       // Filter query parameters by queryParamKeys
       const queryParams = queryParamKeys
-        ? pick(query, queryParamKeys)
+        ? (pick(query, queryParamKeys) as any)
         : undefined;
 
       // Add filtered query parameters to base parameters
@@ -149,10 +161,10 @@ export class Agent {
 
       // Transform keys of queryParams
       if (keyTransform) {
-        this.transformKey(queryParams, keyTransform);
+        this.#transformKey(queryParams, keyTransform);
       }
 
-      return this.requestWithParams({
+      return this.#requestWithParams({
         method,
         path,
         payload,
@@ -166,7 +178,7 @@ export class Agent {
     };
   }
 
-  private async requestWithParams({
+  async #requestWithParams({
     method,
     path,
     payload,
@@ -187,16 +199,16 @@ export class Agent {
     returnResourceIdInLocationHeader?: { field: string };
     headers?: HeadersInit;
   }) {
-    const newPath = urlJoin(this.basePath, path);
+    const newPath = urlJoin(this.#basePath, path);
 
     // Parse template and replace with values from urlParams
     const pathTemplate = parseTemplate(newPath);
     const parsedPath = pathTemplate.expand(urlParams);
-    const url = new URL(`${this.getBaseUrl?.() ?? ""}${parsedPath}`);
-    const requestOptions = { ...this.client.getRequestOptions() };
+    const url = new URL(`${this.#getBaseUrl?.() ?? ""}${parsedPath}`);
+    const requestOptions = { ...this.#client.getRequestOptions() };
     const requestHeaders = new Headers([
       ...new Headers(requestOptions.headers).entries(),
-      ["authorization", `Bearer ${await this.client.getAccessToken()}`],
+      ["authorization", `Bearer ${await this.#client.getAccessToken()}`],
       ["accept", "application/json, text/plain, */*"],
       ...new Headers(headers).entries(),
     ]);
@@ -214,7 +226,7 @@ export class Agent {
     } else {
       // Otherwise assume it's JSON and stringify it.
       requestOptions.body = JSON.stringify(
-        payloadKey ? payload[payloadKey] : payload
+        payloadKey ? payload[payloadKey] : payload,
       );
     }
 
@@ -244,15 +256,15 @@ export class Agent {
 
         if (typeof locationHeader !== "string") {
           throw new Error(
-            `location header is not found in request: ${res.url}`
+            `location header is not found in request: ${res.url}`,
           );
         }
 
-        const resourceId = last(locationHeader.split(SLASH));
+        const resourceId = locationHeader.split(SLASH).pop();
         if (!resourceId) {
           // throw an error to let users know the response is not expected
           throw new Error(
-            `resourceId is not found in Location header from request: ${res.url}`
+            `resourceId is not found in Location header from request: ${res.url}`,
           );
         }
 
@@ -265,7 +277,7 @@ export class Agent {
         Object.entries(headers || []).find(
           ([key, value]) =>
             key.toLowerCase() === "accept" &&
-            value === "application/octet-stream"
+            value === "application/octet-stream",
         )
       ) {
         return res.arrayBuffer();
@@ -284,14 +296,13 @@ export class Agent {
     }
   }
 
-  private transformKey(payload: any, keyMapping: Record<string, string>) {
+  #transformKey(payload: any, keyMapping: Record<string, string>) {
     if (!payload) {
       return;
     }
 
     Object.keys(keyMapping).some((key) => {
-      if (isUndefined(payload[key])) {
-        // Skip if undefined
+      if (typeof payload[key] === "undefined") {
         return false;
       }
       const newKey = keyMapping[key];

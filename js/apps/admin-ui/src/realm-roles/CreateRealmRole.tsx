@@ -4,19 +4,18 @@ import { SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
 import { AttributeForm } from "../components/key-value-form/AttributeForm";
 import { RoleForm } from "../components/role-form/RoleForm";
-import { useAdminClient } from "../context/auth/AdminClient";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { toRealmRole } from "./routes/RealmRole";
 import { toRealmRoles } from "./routes/RealmRoles";
 
 export default function CreateRealmRole() {
-  const { t } = useTranslation("roles");
+  const { t } = useTranslation();
   const form = useForm<AttributeForm>({ mode: "onChange" });
   const navigate = useNavigate();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
 
@@ -35,13 +34,13 @@ export default function CreateRealmRole() {
       });
 
       if (!createdRole) {
-        throw new Error(t("common:notFound"));
+        throw new Error(t("notFound"));
       }
 
       addAlert(t("roleCreated"), AlertVariant.success);
       navigate(toRealmRole({ realm, id: createdRole.id!, tab: "details" }));
     } catch (error) {
-      addError("roles:roleCreateError", error);
+      addError("roleCreateError", error);
     }
   };
 

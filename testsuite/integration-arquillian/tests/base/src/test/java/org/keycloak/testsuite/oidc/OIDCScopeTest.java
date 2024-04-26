@@ -49,8 +49,8 @@ import org.keycloak.testsuite.util.RoleBuilder;
 import org.keycloak.testsuite.util.UserBuilder;
 import org.keycloak.testsuite.util.AccountHelper;
 
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -66,12 +66,12 @@ import static org.keycloak.testsuite.auth.page.AuthRealm.TEST;
  */
 public class OIDCScopeTest extends AbstractOIDCScopeTest {
 
-    private static String userId = KeycloakModelUtils.generateId();
+    private static String userId;
 
     @Override
     public void configureTestRealm(RealmRepresentation testRealm) {
         UserRepresentation user = UserBuilder.create()
-                .id(userId)
+                .id(KeycloakModelUtils.generateId())
                 .username("john")
                 .enabled(true)
                 .email("john@email.cz")
@@ -148,6 +148,12 @@ public class OIDCScopeTest extends AbstractOIDCScopeTest {
         testRealm.getUsers().add(user);
     }
 
+    @Override
+    public void importTestRealms() {
+        super.importTestRealms();
+        userId = adminClient.realm("test").users().search("john", true).get(0).getId();
+    }
+
     @Before
     public void clientConfiguration() {
         ClientManager.realm(adminClient.realm("test")).clientId("test-app").directAccessGrant(true);
@@ -216,7 +222,7 @@ public class OIDCScopeTest extends AbstractOIDCScopeTest {
             Assert.assertEquals("John", idToken.getGivenName());
             Assert.assertEquals("Doe", idToken.getFamilyName());
             Assert.assertEquals("John Doe", idToken.getName());
-            Assert.assertEquals(new Long(1643282255L),idToken.getUpdatedAt());
+            Assert.assertEquals(Long.valueOf(1643282255L),idToken.getUpdatedAt());
         } else {
             Assert.assertNull(idToken.getPreferredUsername());
             Assert.assertNull(idToken.getGivenName());
@@ -573,6 +579,7 @@ public class OIDCScopeTest extends AbstractOIDCScopeTest {
         Assert.assertTrue(tokens2.accessToken.getRealmAccess().isUserInRole("role-2"));
 
         // Ensure I can refresh refreshToken1. Just role1 is present
+        oauth.scope(null);
         OAuthClient.AccessTokenResponse refreshResponse1 = oauth.doRefreshTokenRequest(tokens1.refreshToken, "password");
         Assert.assertEquals(200, refreshResponse1.getStatusCode());
         AccessToken accessToken1 = oauth.verifyToken(refreshResponse1.getAccessToken());

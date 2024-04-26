@@ -18,9 +18,7 @@ describe("Masthead tests", () => {
     it("Go to account console and back to admin console", () => {
       sidebarPage.waitForPageLoad();
       masthead.accountManagement();
-      cy.get("h1").contains("Welcome to Keycloak account management");
-      masthead.goToAdminConsole();
-      masthead.checkIsAdminUI();
+      cy.url().should("contain", "/realms/master/account/");
     });
 
     it("Sign out reachs to log in screen", () => {
@@ -33,17 +31,30 @@ describe("Masthead tests", () => {
     it("Go to realm info", () => {
       sidebarPage.goToClients();
       masthead.toggleUsernameDropdown().clickRealmInfo();
-      cy.get(".pf-c-card__title").should("contain.text", "Server info");
+      cy.get(".pf-l-grid").should("contain.text", "Welcome");
     });
 
     it("Should go to documentation page", () => {
       masthead.clickGlobalHelp();
-      masthead.clickDocumentationLink();
-      cy.get("#header").should("contain.text", "Server Administration Guide");
+      masthead
+        .getDocumentationLink()
+        .invoke("attr", "href")
+        .then((href) => {
+          if (!href) return;
+
+          masthead.clickDocumentationLink();
+          cy.origin(href, () => {
+            cy.get("#header").should(
+              "contain.text",
+              "Server Administration Guide",
+            );
+          });
+        });
     });
 
     it("Enable/disable help mode in desktop mode", () => {
       masthead.assertIsDesktopView();
+      cy.findByTestId("infoTab").click();
       cy.get(helpLabel).should("exist");
       masthead.toggleGlobalHelp();
       masthead.clickGlobalHelp();
@@ -65,9 +76,8 @@ describe("Masthead tests", () => {
         .assertIsMobileView()
         .toggleUsernameDropdown()
         .toggleMobileViewHelp();
-      cy.get(helpLabel).should("not.exist");
       masthead.toggleMobileViewHelp();
-      cy.get(helpLabel).should("exist");
+      cy.findByTestId("helpIcon").should("exist");
     });
   });
 

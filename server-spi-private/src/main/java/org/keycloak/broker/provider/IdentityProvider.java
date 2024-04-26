@@ -20,14 +20,18 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.ModelException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.provider.Provider;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author Pedro Igor
@@ -74,6 +78,8 @@ public interface IdentityProvider<C extends IdentityProviderModel> extends Provi
         Response error(String message);
     }
 
+    C getConfig();
+
 
     void preprocessFederatedIdentity(KeycloakSession session, RealmModel realm, BrokeredIdentityContext context);
     void authenticationFinished(AuthenticationSessionModel authSession, BrokeredIdentityContext context);
@@ -98,7 +104,7 @@ public interface IdentityProvider<C extends IdentityProviderModel> extends Provi
     Response performLogin(AuthenticationRequest request);
 
     /**
-     * <p>Returns a {@link javax.ws.rs.core.Response} containing the token previously stored during the authentication process for a
+     * <p>Returns a {@link jakarta.ws.rs.core.Response} containing the token previously stored during the authentication process for a
      * specific user.</p>
      *
      * @param identity
@@ -132,4 +138,21 @@ public interface IdentityProvider<C extends IdentityProviderModel> extends Provi
      */
     IdentityProviderDataMarshaller getMarshaller();
 
+    /**
+     * Checks whether a mapper is supported for this Identity Provider.
+     */
+    default boolean isMapperSupported(IdentityProviderMapper mapper) {
+    List<String> compatibleIdps = Arrays.asList(mapper.getCompatibleProviders());
+        return compatibleIdps.contains(IdentityProviderMapper.ANY_PROVIDER)
+            || compatibleIdps.contains(getConfig().getProviderId());
+    }
+
+    /**
+     * Reload keys for the identity provider if permitted in it.For example OIDC or
+     * SAML providers will reload the keys from the jwks or metadata endpoint.
+     * @return true if reloaded, false if not
+     */
+    default boolean reloadKeys() {
+        return false;
+    }
 }

@@ -10,9 +10,10 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
-import { useAdminClient, useFetch } from "../context/auth/AdminClient";
 import { useRealm } from "../context/realm-context/RealmContext";
+import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import { KerberosSettingsRequired } from "./kerberos/KerberosSettingsRequired";
 import { toUserFederation } from "./routes/UserFederation";
@@ -20,10 +21,9 @@ import { Header } from "./shared/Header";
 import { SettingsCache } from "./shared/SettingsCache";
 
 export default function UserFederationKerberosSettings() {
-  const { t } = useTranslation("user-federation");
+  const { t } = useTranslation();
   const form = useForm<ComponentRepresentation>({ mode: "onChange" });
   const navigate = useNavigate();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
 
   const { id } = useParams<{ id?: string }>();
@@ -40,10 +40,10 @@ export default function UserFederationKerberosSettings() {
       if (fetchedComponent) {
         setupForm(fetchedComponent);
       } else if (id) {
-        throw new Error(t("common:notFound"));
+        throw new Error(t("notFound"));
       }
     },
-    []
+    [],
   );
 
   const setupForm = (component: ComponentRepresentation) => {
@@ -59,9 +59,15 @@ export default function UserFederationKerberosSettings() {
         await adminClient.components.update({ id }, component);
       }
       setupForm(component as ComponentRepresentation);
-      addAlert(t(!id ? "createSuccess" : "saveSuccess"), AlertVariant.success);
+      addAlert(
+        t(!id ? "createUserProviderSuccess" : "userProviderSaveSuccess"),
+        AlertVariant.success,
+      );
     } catch (error) {
-      addError(`user-federation:${!id ? "createError" : "saveError"}`, error);
+      addError(
+        `${!id ? "createUserProviderError" : "userProviderSaveError"}`,
+        error,
+      );
     }
   };
 
@@ -83,14 +89,14 @@ export default function UserFederationKerberosSettings() {
               type="submit"
               data-testid="kerberos-save"
             >
-              {t("common:save")}
+              {t("save")}
             </Button>
             <Button
               variant="link"
               onClick={() => navigate(toUserFederation({ realm }))}
               data-testid="kerberos-cancel"
             >
-              {t("common:cancel")}
+              {t("cancel")}
             </Button>
           </ActionGroup>
         </Form>

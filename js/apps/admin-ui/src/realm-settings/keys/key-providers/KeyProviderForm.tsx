@@ -11,16 +11,17 @@ import {
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { HelpItem } from "ui-shared";
 
+import { adminClient } from "../../../admin-client";
 import { useAlerts } from "../../../components/alert/Alerts";
 import { DynamicComponents } from "../../../components/dynamic/DynamicComponents";
-import { FormAccess } from "../../../components/form-access/FormAccess";
-import { HelpItem } from "ui-shared";
+import { FormAccess } from "../../../components/form/FormAccess";
 import { KeycloakTextInput } from "../../../components/keycloak-text-input/KeycloakTextInput";
 import { ViewHeader } from "../../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
 import { useServerInfo } from "../../../context/server-info/ServerInfoProvider";
 import { KEY_PROVIDER_TYPE } from "../../../util";
+import { useFetch } from "../../../utils/useFetch";
 import { useParams } from "../../../utils/useParams";
 import { KeyProviderParams, ProviderType } from "../../routes/KeyProvider";
 import { toKeysTab } from "../../routes/KeysTab";
@@ -35,9 +36,8 @@ export const KeyProviderForm = ({
   providerType,
   onClose,
 }: KeyProviderFormProps) => {
-  const { t } = useTranslation("realm-settings");
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const serverInfo = useServerInfo();
@@ -59,7 +59,7 @@ export const KeyProviderForm = ({
     if (component.config)
       Object.entries(component.config).forEach(
         ([key, value]) =>
-          (component.config![key] = Array.isArray(value) ? value : [value])
+          (component.config![key] = Array.isArray(value) ? value : [value]),
       );
     try {
       if (id) {
@@ -68,7 +68,7 @@ export const KeyProviderForm = ({
           {
             ...component,
             providerType: KEY_PROVIDER_TYPE,
-          }
+          },
         );
         addAlert(t("saveProviderSuccess"), AlertVariant.success);
       } else {
@@ -81,7 +81,7 @@ export const KeyProviderForm = ({
         onClose?.();
       }
     } catch (error) {
-      addError("realm-settings:saveProviderError", error);
+      addError("saveProviderError", error);
     }
   };
 
@@ -94,7 +94,7 @@ export const KeyProviderForm = ({
         reset({ ...result });
       }
     },
-    []
+    [],
   );
 
   return (
@@ -104,7 +104,7 @@ export const KeyProviderForm = ({
           label={t("providerId")}
           labelIcon={
             <HelpItem
-              helpText={t("client-scopes-help:mapperName")}
+              helpText={t("mapperNameHelp")}
               fieldLabelId="providerId"
             />
           }
@@ -120,19 +120,16 @@ export const KeyProviderForm = ({
         </FormGroup>
       )}
       <FormGroup
-        label={t("common:name")}
+        label={t("name")}
         labelIcon={
-          <HelpItem
-            helpText={t("client-scopes-help:mapperName")}
-            fieldLabelId="name"
-          />
+          <HelpItem helpText={t("mapperNameHelp")} fieldLabelId="name" />
         }
         fieldId="name"
         isRequired
         validated={
           errors.name ? ValidatedOptions.error : ValidatedOptions.default
         }
-        helperTextInvalid={t("common:required")}
+        helperTextInvalid={t("required")}
       >
         <Controller
           name="name"
@@ -163,10 +160,10 @@ export const KeyProviderForm = ({
           variant="primary"
           type="submit"
         >
-          {t("common:save")}
+          {t("save")}
         </Button>
         <Button onClick={() => onClose?.()} variant="link">
-          {t("common:cancel")}
+          {t("cancel")}
         </Button>
       </ActionGroup>
     </FormAccess>
@@ -174,7 +171,7 @@ export const KeyProviderForm = ({
 };
 
 export default function KeyProviderFormPage() {
-  const { t } = useTranslation("realm-settings");
+  const { t } = useTranslation();
   const params = useParams<KeyProviderParams>();
   const navigate = useNavigate();
 

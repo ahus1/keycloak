@@ -22,21 +22,21 @@ const allTimes: TimeUnit[] = [
   { unit: "day", label: "times.days", multiplier: 86400 },
 ];
 
-export type TimeSelectorProps = TextInputProps &
+export type TimeSelectorProps = Omit<TextInputProps, "onChange"> &
   Pick<DropdownProps, "menuAppendTo"> & {
-    value: number;
+    value?: number;
     units?: Unit[];
-    onChange: (time: number | string) => void;
+    onChange?: (time: number | string) => void;
     className?: string;
   };
 
-export const getTimeUnit = (value: number) =>
+export const getTimeUnit = (value: number | undefined = 0) =>
   allTimes.reduce(
     (v, time) =>
       value % time.multiplier === 0 && v.multiplier < time.multiplier
         ? time
         : v,
-    allTimes[0]
+    allTimes[0],
   );
 
 export const toHumanFormat = (value: number, locale: string) => {
@@ -58,21 +58,31 @@ export const TimeSelector = ({
   menuAppendTo,
   ...rest
 }: TimeSelectorProps) => {
-  const { t } = useTranslation("common");
+  const { t } = useTranslation();
 
-  const times = useMemo(
-    () => units.map((unit) => allTimes.find((time) => time.unit === unit)!),
-    [units]
-  );
+  const [lastMultiplier, setLastMultiplier] = useState<number>();
 
   const defaultMultiplier = useMemo(
     () => allTimes.find((time) => time.unit === units[0])?.multiplier,
-    [units]
+    [units],
   );
 
   const [timeValue, setTimeValue] = useState<"" | number>("");
   const [multiplier, setMultiplier] = useState(defaultMultiplier);
   const [open, setOpen] = useState(false);
+
+  const times = useMemo(() => {
+    const filteredUnits = units.map(
+      (unit) => allTimes.find((time) => time.unit === unit)!,
+    );
+    if (
+      !filteredUnits.every((u) => u.multiplier === multiplier) &&
+      filteredUnits[0] !== allTimes[0]
+    ) {
+      filteredUnits.unshift(allTimes[0]);
+    }
+    return filteredUnits;
+  }, [units, multiplier]);
 
   useEffect(() => {
     const multiplier = getTimeUnit(value).multiplier;
@@ -80,21 +90,23 @@ export const TimeSelector = ({
     if (value) {
       setMultiplier(multiplier);
       setTimeValue(value / multiplier);
+      setLastMultiplier(multiplier);
     } else {
-      setTimeValue(value);
-      setMultiplier(defaultMultiplier);
+      setTimeValue(value || "");
+      setMultiplier(lastMultiplier ?? defaultMultiplier);
+      setLastMultiplier(lastMultiplier ?? defaultMultiplier);
     }
-  }, [value]);
+  }, [value, defaultMultiplier]);
 
   const updateTimeout = (
     timeout: "" | number,
-    times: number | undefined = multiplier
+    times: number | undefined = multiplier,
   ) => {
     if (timeout !== "") {
-      onChange(timeout * (times || 1));
+      onChange?.(timeout * (times || 1));
       setTimeValue(timeout);
     } else {
-      onChange("");
+      onChange?.("");
     }
   };
 

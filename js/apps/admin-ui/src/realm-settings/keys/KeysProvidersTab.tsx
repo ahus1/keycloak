@@ -17,10 +17,10 @@ import { KeyboardEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { adminClient } from "../../admin-client";
 import { DraggableTable } from "../../authentication/components/DraggableTable";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { KEY_PROVIDER_TYPE } from "../../util";
@@ -49,14 +49,13 @@ export const KeysProvidersTab = ({
   realmComponents,
   refresh,
 }: KeysProvidersTabProps) => {
-  const { t } = useTranslation("realm-settings");
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
 
   const [searchVal, setSearchVal] = useState("");
   const [filteredComponents, setFilteredComponents] = useState<ComponentData[]>(
-    []
+    [],
   );
 
   const [isCreateModalOpen, handleModalToggle] = useToggle();
@@ -76,7 +75,7 @@ export const KeysProvidersTab = ({
       realmComponents.map((component) => {
         const provider = keyProviderComponentTypes.find(
           (componentType: ComponentTypeRepresentation) =>
-            component.providerId === componentType.id
+            component.providerId === componentType.id,
         );
 
         return {
@@ -84,15 +83,15 @@ export const KeysProvidersTab = ({
           providerDescription: provider?.helpText,
         };
       }),
-    [realmComponents]
+    [realmComponents],
   );
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "realm-settings:deleteProviderTitle",
+    titleKey: "deleteProviderTitle",
     messageKey: t("deleteProviderConfirm", {
       provider: selectedComponent?.name,
     }),
-    continueButtonLabel: "common:delete",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
@@ -105,7 +104,7 @@ export const KeysProvidersTab = ({
 
         addAlert(t("deleteProviderSuccess"), AlertVariant.success);
       } catch (error) {
-        addError("realm-settings:deleteProviderError", error);
+        addError("deleteProviderError", error);
       }
     },
   });
@@ -116,7 +115,7 @@ export const KeysProvidersTab = ({
       const filteredComponents = components.filter(
         (component) =>
           component.name?.includes(searchVal) ||
-          component.providerId?.includes(searchVal)
+          component.providerId?.includes(searchVal),
       );
       setFilteredComponents(filteredComponents);
     } else {
@@ -167,14 +166,14 @@ export const KeysProvidersTab = ({
                   id={"inputGroupName"}
                   data-testid="provider-search-input"
                   type="search"
-                  aria-label={t("common:search")}
-                  placeholder={t("common:search")}
+                  aria-label={t("search")}
+                  placeholder={t("search")}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                 />
                 <Button
                   variant={ButtonVariant.control}
-                  aria-label={t("common:search")}
+                  aria-label={t("search")}
                   onClick={onSearch}
                 >
                   <SearchIcon />
@@ -217,7 +216,7 @@ export const KeysProvidersTab = ({
                       ).toString(),
                     ],
                   },
-                }
+                },
               );
             });
 
@@ -226,13 +225,13 @@ export const KeysProvidersTab = ({
               refresh();
               addAlert(t("saveProviderListSuccess"), AlertVariant.success);
             } catch (error) {
-              addError("realm-settings:saveProviderError", error);
+              addError("saveProviderError", error);
             }
           }}
           columns={[
             {
               name: "name",
-              displayKey: "realm-settings:name",
+              displayKey: "name",
               cellRenderer: (component) => (
                 <Link
                   key={component.name}
@@ -249,16 +248,16 @@ export const KeysProvidersTab = ({
             },
             {
               name: "providerId",
-              displayKey: "realm-settings:provider",
+              displayKey: "provider",
             },
             {
               name: "providerDescription",
-              displayKey: "realm-settings:providerDescription",
+              displayKey: "providerDescription",
             },
           ]}
           actions={[
             {
-              title: t("common:delete"),
+              title: t("delete"),
               onClick: (_key, _idx, component) => {
                 setSelectedComponent(component as ComponentRepresentation);
                 toggleDeleteDialog();

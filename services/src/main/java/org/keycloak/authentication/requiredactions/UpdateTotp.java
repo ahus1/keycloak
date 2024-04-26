@@ -18,6 +18,7 @@
 package org.keycloak.authentication.requiredactions;
 
 import org.keycloak.Config;
+import org.keycloak.authentication.AuthenticatorUtil;
 import org.keycloak.authentication.CredentialRegistrator;
 import org.keycloak.authentication.InitiatedActionSupport;
 import org.keycloak.authentication.RequiredActionContext;
@@ -32,6 +33,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.OTPPolicy;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.utils.CredentialValidation;
 import org.keycloak.models.utils.FormMessage;
@@ -39,8 +41,8 @@ import org.keycloak.services.messages.Messages;
 import org.keycloak.services.validation.Validation;
 import org.keycloak.utils.CredentialHelper;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 import java.util.stream.Stream;
 
 /**
@@ -105,6 +107,10 @@ public class UpdateTotp implements RequiredActionProvider, RequiredActionFactory
             return;
         }
 
+        if ("on".equals(formData.getFirst("logout-sessions"))) {
+            AuthenticatorUtil.logoutOtherSessions(context);
+        }
+
         if (!CredentialHelper.createOTPCredential(context.getSession(), context.getRealm(), context.getUser(), challengeResponse, credentialModel)) {
             Response challenge = context.form()
                     .setAttribute("mode", mode)
@@ -113,6 +119,7 @@ public class UpdateTotp implements RequiredActionProvider, RequiredActionFactory
             context.challenge(challenge);
             return;
         }
+        context.getAuthenticationSession().removeAuthNote(Constants.TOTP_SECRET_KEY);
         context.success();
     }
 

@@ -26,7 +26,7 @@ import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.utils.HmacOTP;
 import org.keycloak.utils.TotpUtils;
 
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriBuilder;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -50,6 +50,10 @@ public class TotpBean {
     private final UserModel user;
 
     public TotpBean(KeycloakSession session, RealmModel realm, UserModel user, UriBuilder uriBuilder) {
+        this(session, realm, user, uriBuilder, null);
+    }
+
+    public TotpBean(KeycloakSession session, RealmModel realm, UserModel user, UriBuilder uriBuilder, String secret) {
         this.session = session;
         this.realm = realm;
         this.user = user;
@@ -61,7 +65,11 @@ public class TotpBean {
         } else {
             otpCredentials = Collections.EMPTY_LIST;
         }
-        this.totpSecret = HmacOTP.generateSecret(20);
+        if (secret == null) {
+            this.totpSecret = HmacOTP.generateSecret(20);
+        } else {
+            this.totpSecret = secret;
+        }
         this.totpSecretEncoded = TotpUtils.encode(totpSecret);
         this.totpSecretQrCode = TotpUtils.qrCode(totpSecret, realm, user);
 

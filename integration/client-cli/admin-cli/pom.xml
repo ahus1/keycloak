@@ -29,10 +29,20 @@
     <name>Keycloak Admin CLI</name>
     <description/>
 
+    <properties>
+        <jansi.version>1.18</jansi.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.jboss.aesh</groupId>
             <artifactId>aesh</artifactId>
+        </dependency>
+        <!-- Jansi library version needs to be overridden due to the backwards compatibility - see #21851 -->
+        <dependency>
+            <groupId>org.fusesource.jansi</groupId>
+            <artifactId>jansi</artifactId>
+            <version>${jansi.version}</version>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
@@ -133,7 +143,7 @@
                                     </includes>
                                 </filter>
                                 <filter>
-                                    <artifact>org.jboss.spec.javax.ws.rs:jboss-jaxrs-api_2.1_spec</artifact>
+                                    <artifact>jakarta.ws.rs:jakarta.ws.rs-api</artifact>
                                     <includes>
                                         <include>**/**</include>
                                     </includes>

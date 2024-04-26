@@ -4,21 +4,20 @@ import { SubmitHandler, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { AttributeForm } from "../../components/key-value-form/AttributeForm";
 import { RoleForm } from "../../components/role-form/RoleForm";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { toClient } from "../routes/Client";
 import { toClientRole } from "../routes/ClientRole";
 import { NewRoleParams } from "../routes/NewRole";
 
 export default function CreateClientRole() {
-  const { t } = useTranslation("roles");
+  const { t } = useTranslation();
   const form = useForm<AttributeForm>({ mode: "onChange" });
   const navigate = useNavigate();
   const { clientId } = useParams<NewRoleParams>();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
 
@@ -47,10 +46,10 @@ export default function CreateClientRole() {
           clientId: clientId!,
           id: createdRole.id!,
           tab: "details",
-        })
+        }),
       );
     } catch (error) {
-      addError("roles:roleCreateError", error);
+      addError("roleCreateError", error);
     }
   };
 

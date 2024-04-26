@@ -18,12 +18,14 @@
 package org.keycloak.testsuite.client.policies;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.keycloak.testsuite.admin.AbstractAdminTest.loadJson;
@@ -38,10 +40,12 @@ import static org.keycloak.testsuite.util.ClientPoliciesUtil.createHolderOfKeyEn
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createIntentClientBindCheckExecutorConfig;
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createPKCEEnforceExecutorConfig;
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createRejectisResourceOwnerPasswordCredentialsGrantExecutorConfig;
+import static org.keycloak.testsuite.util.ClientPoliciesUtil.createRejectImplicitGrantExecutorConfig;
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createSecureClientAuthenticatorExecutorConfig;
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createSecureSigningAlgorithmForSignedJwtEnforceExecutorConfig;
 import static org.keycloak.testsuite.util.ClientPoliciesUtil.createTestRaiseExeptionConditionConfig;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,9 +53,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import org.hamcrest.Matchers;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.jboss.logging.Logger;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -103,16 +107,19 @@ import org.keycloak.services.clientpolicy.executor.FullScopeDisabledExecutorFact
 import org.keycloak.services.clientpolicy.executor.HolderOfKeyEnforcerExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.IntentClientBindCheckExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.PKCEEnforcerExecutorFactory;
+import org.keycloak.services.clientpolicy.executor.RejectImplicitGrantExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.RejectRequestExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.RejectResourceOwnerPasswordCredentialsGrantExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.SecureClientAuthenticatorExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.SecureSessionEnforceExecutorFactory;
 import org.keycloak.services.clientpolicy.executor.SecureSigningAlgorithmForSignedJwtExecutorFactory;
+import org.keycloak.services.clientpolicy.executor.SuppressRefreshTokenRotationExecutorFactory;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.client.resources.TestApplicationResourceUrls;
 import org.keycloak.testsuite.services.clientpolicy.condition.TestRaiseExceptionConditionFactory;
 import org.keycloak.testsuite.updaters.ClientAttributeUpdater;
 import org.keycloak.testsuite.util.ClientBuilder;
+import org.keycloak.testsuite.util.MutualTLSUtils;
 import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientPoliciesBuilder;
 import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientPolicyBuilder;
 import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientProfileBuilder;
@@ -245,8 +252,8 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
         });
         OIDCClientRepresentation clientRep = getClientDynamically(clientId);
         assertEquals(OIDCLoginProtocol.CLIENT_SECRET_BASIC, clientRep.getTokenEndpointAuthMethod());
-        events.expect(EventType.CLIENT_REGISTER).client(clientId).user(Matchers.isEmptyOrNullString()).assertEvent();
-        events.expect(EventType.CLIENT_INFO).client(clientId).user(Matchers.isEmptyOrNullString()).assertEvent();
+        events.expect(EventType.CLIENT_REGISTER).client(clientId).user(is(emptyOrNullString())).assertEvent();
+        events.expect(EventType.CLIENT_INFO).client(clientId).user(is(emptyOrNullString())).assertEvent();
         adminClient.realm(REALM_NAME).clients().get(clientId).roles().create(RoleBuilder.create().name(SAMPLE_CLIENT_ROLE).build());
 
         successfulLoginAndLogout(clientId, clientRep.getClientSecret());
@@ -384,12 +391,12 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
         String clientName = generateSuffixedName(CLIENT_NAME);
         String clientId = createClientDynamically(clientName, (OIDCClientRepresentation clientRep) -> {
         });
-        events.expect(EventType.CLIENT_REGISTER).client(clientId).user(Matchers.isEmptyOrNullString()).assertEvent();
+        events.expect(EventType.CLIENT_REGISTER).client(clientId).user(is(emptyOrNullString())).assertEvent();
         OIDCClientRepresentation response = getClientDynamically(clientId);
         String clientSecret = response.getClientSecret();
         assertEquals(clientName, response.getClientName());
         assertEquals(OIDCLoginProtocol.CLIENT_SECRET_BASIC, response.getTokenEndpointAuthMethod());
-        events.expect(EventType.CLIENT_INFO).client(clientId).user(Matchers.isEmptyOrNullString()).assertEvent();
+        events.expect(EventType.CLIENT_INFO).client(clientId).user(is(emptyOrNullString())).assertEvent();
 
         adminClient.realm(REALM_NAME).clients().get(clientId).roles().create(RoleBuilder.create().name(SAMPLE_CLIENT_ROLE).build());
 
@@ -568,6 +575,62 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
             OIDCAdvancedConfigWrapper.fromClientRepresentation(clientRep).setUseMtlsHoKToken(true);
             cau.update();
             checkMtlsFlow();
+        }
+    }
+
+    @Test
+    public void testSuppressRefreshTokenRotationWithHolderOfKeyToken() throws Exception {
+        Assume.assumeTrue("This test must be executed with enabled TLS.", ServerURLs.AUTH_SERVER_SSL_REQUIRED);
+
+        // register profiles
+        String json = (new ClientProfilesBuilder()).addProfile(
+                (new ClientProfileBuilder()).createProfile(PROFILE_NAME, "Le Premier Profil")
+                        .addExecutor(SuppressRefreshTokenRotationExecutorFactory.PROVIDER_ID, null)
+                        .addExecutor(HolderOfKeyEnforcerExecutorFactory.PROVIDER_ID,
+                                createHolderOfKeyEnforceExecutorConfig(Boolean.TRUE))
+                        .toRepresentation()
+        ).toString();
+        updateProfiles(json);
+
+        // register policies
+        json = (new ClientPoliciesBuilder()).addPolicy(
+                (new ClientPolicyBuilder()).createPolicy(POLICY_NAME, "Den Forste Politikken", Boolean.TRUE)
+                        .addCondition(ClientRolesConditionFactory.PROVIDER_ID,
+                                createClientRolesConditionConfig(Arrays.asList(SAMPLE_CLIENT_ROLE)))
+                        .addProfile(PROFILE_NAME)
+                        .toRepresentation()
+        ).toString();
+        updatePolicies(json);
+
+        try (ClientAttributeUpdater cau = ClientAttributeUpdater.forClient(adminClient, REALM_NAME, TEST_CLIENT)) {
+            ClientRepresentation clientRep = cau.getResource().toRepresentation();
+            Assert.assertNotNull(clientRep);
+            OIDCAdvancedConfigWrapper.fromClientRepresentation(clientRep).setUseMtlsHoKToken(true);
+            cau.update();
+            // Check login.
+            OAuthClient.AuthorizationEndpointResponse loginResponse = oauth.doLogin(TEST_USER_NAME, TEST_USER_PASSWORD);
+            Assert.assertNull(loginResponse.getError());
+
+            String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+
+            // Check token obtaining.
+            OAuthClient.AccessTokenResponse accessTokenResponse;
+            try (CloseableHttpClient client = MutualTLSUtils.newCloseableHttpClientWithDefaultKeyStoreAndTrustStore()) {
+                accessTokenResponse = oauth.doAccessTokenRequest(code, TEST_CLIENT_SECRET, client);
+            } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+            }
+            assertEquals(200, accessTokenResponse.getStatusCode());
+
+            // Check token refresh.
+            OAuthClient.AccessTokenResponse accessTokenResponseRefreshed;
+            try (CloseableHttpClient client = MutualTLSUtils.newCloseableHttpClientWithDefaultKeyStoreAndTrustStore()) {
+                accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken(), TEST_CLIENT_SECRET, client);
+            } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+            }
+            assertEquals(200, accessTokenResponseRefreshed.getStatusCode());
+            assertNull(accessTokenResponseRefreshed.getRefreshToken());
         }
     }
 
@@ -1156,4 +1219,70 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
         assertEquals(OAuthErrorException.INVALID_REQUEST, oauth.getCurrentFragment().get(OAuth2Constants.ERROR));
         assertEquals("no claim for an intent value for ID token" , oauth.getCurrentFragment().get(OAuth2Constants.ERROR_DESCRIPTION));
     }
+
+    @Test
+    public void testRejectImplicitGrantExecutor() throws Exception {
+
+        String clientId = generateSuffixedName(CLIENT_NAME);
+        String clientSecret = "secret";
+
+        createClientByAdmin(clientId, (ClientRepresentation clientRep) -> {
+            clientRep.setSecret(clientSecret);
+            clientRep.setStandardFlowEnabled(Boolean.TRUE);
+            clientRep.setImplicitFlowEnabled(Boolean.TRUE);
+            clientRep.setPublicClient(Boolean.FALSE);
+        });
+
+        // register profiles
+        String json = (new ClientProfilesBuilder()).addProfile(
+                (new ClientProfileBuilder()).createProfile(PROFILE_NAME, "Az Elso Profil")
+                    .addExecutor(RejectImplicitGrantExecutorFactory.PROVIDER_ID,
+                        createRejectImplicitGrantExecutorConfig(Boolean.TRUE))
+                    .toRepresentation()
+                ).toString();
+        updateProfiles(json);
+
+        // register policies
+        json = (new ClientPoliciesBuilder()).addPolicy(
+                (new ClientPolicyBuilder()).createPolicy(POLICY_NAME, "Az Elso Politika", Boolean.TRUE)
+                    .addCondition(AnyClientConditionFactory.PROVIDER_ID, 
+                        createAnyClientConditionConfig())
+                    .addProfile(PROFILE_NAME)
+                    .toRepresentation()
+                ).toString();
+        updatePolicies(json);
+
+        try {
+            String expectedErrorDescription = "Implicit/Hybrid flow is prohibited.";
+            oauth.clientId(clientId);
+
+            // implicit grant
+            testProhibitedImplicitOrHybridFlow(false, OIDCResponseType.TOKEN, null, OAuthErrorException.INVALID_REQUEST, expectedErrorDescription);
+
+            // hybrid grant
+            testProhibitedImplicitOrHybridFlow(true, OIDCResponseType.TOKEN + " " + OIDCResponseType.ID_TOKEN, "exsefweag", OAuthErrorException.INVALID_REQUEST, expectedErrorDescription);
+
+            // hybrid grant
+            testProhibitedImplicitOrHybridFlow(true, OIDCResponseType.TOKEN + " " + OIDCResponseType.CODE, "exsefweag", OAuthErrorException.INVALID_REQUEST, expectedErrorDescription);
+
+            // hybrid grant
+            testProhibitedImplicitOrHybridFlow(true, OIDCResponseType.TOKEN + " " + OIDCResponseType.CODE + " " + OIDCResponseType.ID_TOKEN, "exsefweag", OAuthErrorException.INVALID_REQUEST, expectedErrorDescription);
+
+        } finally {
+            // revert test client instance settings the same as OAuthClient.init
+            oauth.openid(true);
+            oauth.responseType(OIDCResponseType.CODE);
+            oauth.nonce(null);
+        }
+    }
+
+    private void testProhibitedImplicitOrHybridFlow(boolean isOpenid, String responseType, String nonce, String expectedError, String expectedErrorDescription) {
+        oauth.openid(isOpenid);
+        oauth.responseType(responseType);
+        oauth.nonce(nonce);
+        oauth.openLoginForm();
+        assertEquals(expectedError, oauth.getCurrentFragment().get(OAuth2Constants.ERROR));
+        assertEquals(expectedErrorDescription, oauth.getCurrentFragment().get(OAuth2Constants.ERROR_DESCRIPTION));
+    }
+
 }

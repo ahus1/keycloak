@@ -29,8 +29,8 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.representations.JsonWebToken;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriBuilder;
 import java.util.Arrays;
 
 /**
@@ -77,7 +77,6 @@ public class GoogleIdentityProvider extends OIDCIdentityProvider implements Soci
     protected boolean supportsExternalExchange() {
         return true;
     }
-
 
     @Override
     public boolean isIssuer(String issuer, MultivaluedMap<String, String> params) {

@@ -1,3 +1,5 @@
+import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
+import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
 import {
   AlertVariant,
   Badge,
@@ -8,40 +10,39 @@ import {
   TabTitleText,
   ToolbarItem,
 } from "@patternfly/react-core";
-import { cellWidth, IRowData, TableText } from "@patternfly/react-table";
-import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
-import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
+import { IRowData, TableText, cellWidth } from "@patternfly/react-table";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { FormattedLink } from "../components/external-link/FormattedLink";
+import {
+  RoutableTabs,
+  useRoutableTab,
+} from "../components/routable-tabs/RoutableTabs";
 import {
   Action,
   KeycloakDataTable,
 } from "../components/table-toolbar/KeycloakDataTable";
 import { ViewHeader } from "../components/view-header/ViewHeader";
-import { useAdminClient } from "../context/auth/AdminClient";
+import { useAccess } from "../context/access/Access";
 import { useRealm } from "../context/realm-context/RealmContext";
+import helpUrls from "../help-urls";
 import { emptyFormatter, exportClient } from "../util";
 import { convertClientToUrl } from "../utils/client-url";
 import { InitialAccessTokenList } from "./initial-access/InitialAccessTokenList";
+import { ClientRegistration } from "./registration/ClientRegistration";
 import { toAddClient } from "./routes/AddClient";
 import { toClient } from "./routes/Client";
-import { toImportClient } from "./routes/ImportClient";
-import { isRealmClient, getProtocolName } from "./utils";
-import helpUrls from "../help-urls";
-import { useAccess } from "../context/access/Access";
-import {
-  RoutableTabs,
-  useRoutableTab,
-} from "../components/routable-tabs/RoutableTabs";
 import { ClientsTab, toClients } from "./routes/Clients";
-import { ClientRegistration } from "./registration/ClientRegistration";
+import { toImportClient } from "./routes/ImportClient";
+import { getProtocolName, isRealmClient } from "./utils";
 
 const ClientDetailLink = (client: ClientRepresentation) => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { realm } = useRealm();
   return (
     <Link
@@ -51,7 +52,7 @@ const ClientDetailLink = (client: ClientRepresentation) => {
       {client.clientId}
       {!client.enabled && (
         <Badge key={`${client.id}-disabled`} isRead className="pf-u-ml-sm">
-          {t("common:disabled")}
+          {t("disabled")}
         </Badge>
       )}
     </Link>
@@ -71,7 +72,6 @@ const ClientDescription = (client: ClientRepresentation) => (
 );
 
 const ClientHomeLink = (client: ClientRepresentation) => {
-  const { adminClient } = useAdminClient();
   const href = convertClientToUrl(client, adminClient.baseUrl);
 
   if (!href) {
@@ -82,7 +82,7 @@ const ClientHomeLink = (client: ClientRepresentation) => {
 };
 
 const ToolbarItems = () => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { realm } = useRealm();
 
   const { hasAccess } = useAccess();
@@ -115,10 +115,8 @@ const ToolbarItems = () => {
 };
 
 export default function ClientsSection() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
-
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
 
   const [key, setKey] = useState(0);
@@ -148,8 +146,8 @@ export default function ClientsSection() {
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
     titleKey: t("clientDelete", { clientId: selectedClient?.clientId }),
-    messageKey: "clients:clientDeleteConfirm",
-    continueButtonLabel: "common:delete",
+    messageKey: "clientDeleteConfirm",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
@@ -159,7 +157,7 @@ export default function ClientsSection() {
         addAlert(t("clientDeletedSuccess"), AlertVariant.success);
         refresh();
       } catch (error) {
-        addError("clients:clientDeleteError", error);
+        addError("clientDeleteError", error);
       }
     },
   });
@@ -167,8 +165,8 @@ export default function ClientsSection() {
   return (
     <>
       <ViewHeader
-        titleKey="clients:clientList"
-        subKey="clients:clientsExplain"
+        titleKey="clientList"
+        subKey="clientsExplain"
         helpUrl={helpUrls.clientsUrl}
         divider={false}
       />
@@ -191,14 +189,14 @@ export default function ClientsSection() {
               key={key}
               loader={loader}
               isPaginated
-              ariaLabelKey="clients:clientList"
-              searchPlaceholderKey="clients:searchForClient"
+              ariaLabelKey="clientList"
+              searchPlaceholderKey="searchForClient"
               toolbarItem={<ToolbarItems />}
               actionResolver={(rowData: IRowData) => {
                 const client: ClientRepresentation = rowData.data;
                 const actions: Action<ClientRepresentation>[] = [
                   {
-                    title: t("common:export"),
+                    title: t("export"),
                     onClick() {
                       exportClient(client);
                     },
@@ -210,7 +208,7 @@ export default function ClientsSection() {
                   (isManager || client.access?.configure)
                 ) {
                   actions.push({
-                    title: t("common:delete"),
+                    title: t("delete"),
                     onClick() {
                       setSelectedClient(client);
                       toggleDeleteDialog();
@@ -223,32 +221,32 @@ export default function ClientsSection() {
               columns={[
                 {
                   name: "clientId",
-                  displayKey: "common:clientId",
+                  displayKey: "clientId",
                   transforms: [cellWidth(20)],
                   cellRenderer: ClientDetailLink,
                 },
                 {
                   name: "clientName",
-                  displayKey: "common:clientName",
+                  displayKey: "clientName",
                   transforms: [cellWidth(20)],
                   cellRenderer: ClientName,
                 },
                 {
                   name: "protocol",
-                  displayKey: "common:type",
+                  displayKey: "type",
                   transforms: [cellWidth(10)],
                   cellRenderer: (client) =>
                     getProtocolName(t, client.protocol ?? "openid-connect"),
                 },
                 {
                   name: "description",
-                  displayKey: "common:description",
+                  displayKey: "description",
                   transforms: [cellWidth(30)],
                   cellRenderer: ClientDescription,
                 },
                 {
                   name: "baseUrl",
-                  displayKey: "clients:homeURL",
+                  displayKey: "homeURL",
                   transforms: [cellWidth(20)],
                   cellRenderer: ClientHomeLink,
                 },

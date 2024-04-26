@@ -1,20 +1,21 @@
-import { useState } from "react";
-import { Controller, useFormContext } from "react-hook-form";
+import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
+import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
 import {
-  SelectOption,
   FormGroup,
   Select,
+  SelectOption,
   SelectVariant,
 } from "@patternfly/react-core";
-
-import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
-import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
-import { HelpItem } from "ui-shared";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
+import { useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { HelpItem } from "ui-shared";
+
+import { adminClient } from "../../../admin-client";
+import { useFetch } from "../../../utils/useFetch";
 
 export const Client = () => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const {
     control,
     getValues,
@@ -25,8 +26,6 @@ export const Client = () => {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<ClientRepresentation[]>([]);
   const [search, setSearch] = useState("");
-
-  const { adminClient } = useAdminClient();
 
   useFetch(
     async () => {
@@ -42,14 +41,14 @@ export const Client = () => {
         return await Promise.all(
           values.map(
             (id: string) =>
-              adminClient.clients.findOne({ id }) as ClientRepresentation
-          )
+              adminClient.clients.findOne({ id }) as ClientRepresentation,
+          ),
         );
       }
       return await adminClient.clients.find(params);
     },
     setClients,
-    [search]
+    [search],
   );
 
   const convert = (clients: ClientRepresentation[]) =>
@@ -67,10 +66,7 @@ export const Client = () => {
     <FormGroup
       label={t("clients")}
       labelIcon={
-        <HelpItem
-          helpText={t("clients-help:policyClient")}
-          fieldLabelId="clients:client"
-        />
+        <HelpItem helpText={t("policyClientHelp")} fieldLabelId="client" />
       }
       fieldId="clients"
       helperTextInvalid={t("requiredClient")}
@@ -88,9 +84,11 @@ export const Client = () => {
           <Select
             toggleId="clients"
             variant={SelectVariant.typeaheadMulti}
+            typeAheadAriaLabel={t("clients")}
             onToggle={(open) => setOpen(open)}
             isOpen={open}
             selections={field.value}
+            aria-label={t("selectClients")}
             onFilter={(_, value) => {
               setSearch(value);
               return convert(clients);
@@ -99,14 +97,13 @@ export const Client = () => {
               const option = v.toString();
               if (field.value.includes(option)) {
                 field.onChange(
-                  field.value.filter((item: string) => item !== option)
+                  field.value.filter((item: string) => item !== option),
                 );
               } else {
                 field.onChange([...field.value, option]);
               }
               setOpen(false);
             }}
-            aria-label={t("clients")}
           >
             {convert(clients)}
           </Select>

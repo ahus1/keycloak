@@ -1,9 +1,7 @@
 import type { AccessType } from "@keycloak/keycloak-admin-client/lib/defs/whoAmIRepresentation";
 import type { TFunction } from "i18next";
 import type { ComponentType } from "react";
-import type { NonIndexRouteObject, RouteObject } from "react-router";
-import { initAdminClient } from "./context/auth/AdminClient";
-import { initI18n } from "./i18n";
+import type { NonIndexRouteObject, RouteObject } from "react-router-dom";
 
 import { App } from "./App";
 import { PageNotFoundSection } from "./PageNotFoundSection";
@@ -20,6 +18,7 @@ import realmRoutes from "./realm/routes";
 import sessionRoutes from "./sessions/routes";
 import userFederationRoutes from "./user-federation/routes";
 import userRoutes from "./user/routes";
+import pageRoutes from "./page/routes";
 
 export type AppRouteObjectHandle = {
   access: AccessType | AccessType[];
@@ -53,15 +52,12 @@ export const routes: AppRouteObject[] = [
   ...userRoutes,
   ...groupsRoutes,
   ...dashboardRoutes,
+  ...pageRoutes,
   NotFoundRoute,
 ];
 
-const { keycloak, adminClient } = await initAdminClient();
-
-await initI18n(adminClient);
-
 export const RootRoute: RouteObject = {
   path: "/",
-  element: <App keycloak={keycloak} adminClient={adminClient} />,
+  element: <App />,
   children: routes,
 };

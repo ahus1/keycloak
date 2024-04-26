@@ -1,12 +1,13 @@
-import type UserProfileConfig from "@keycloak/keycloak-admin-client/lib/defs/userProfileConfig";
+import type { UserProfileConfig } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 import { AlertVariant } from "@patternfly/react-core";
 import { PropsWithChildren, useState } from "react";
 import { useTranslation } from "react-i18next";
-
-import { useAlerts } from "../../components/alert/Alerts";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
-import { useRealm } from "../../context/realm-context/RealmContext";
 import { createNamedContext, useRequiredContext } from "ui-shared";
+
+import { adminClient } from "../../admin-client";
+import { useAlerts } from "../../components/alert/Alerts";
+import { useRealm } from "../../context/realm-context/RealmContext";
+import { useFetch } from "../../utils/useFetch";
 
 type UserProfileProps = {
   config: UserProfileConfig | null;
@@ -16,7 +17,7 @@ type UserProfileProps = {
 
 export type SaveCallback = (
   updatedConfig: UserProfileConfig,
-  options?: SaveOptions
+  options?: SaveOptions,
 ) => Promise<boolean>;
 
 export type SaveOptions = {
@@ -29,7 +30,6 @@ export const UserProfileContext = createNamedContext<
 >("UserProfileContext", undefined);
 
 export const UserProfileProvider = ({ children }: PropsWithChildren) => {
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
   const { t } = useTranslation();
@@ -40,7 +40,7 @@ export const UserProfileProvider = ({ children }: PropsWithChildren) => {
   useFetch(
     () => adminClient.users.getProfile({ realm }),
     (config) => setConfig(config),
-    [refreshCount]
+    [refreshCount],
   );
 
   const save: SaveCallback = async (updatedConfig, options) => {
@@ -55,17 +55,14 @@ export const UserProfileProvider = ({ children }: PropsWithChildren) => {
       setIsSaving(false);
       setRefreshCount(refreshCount + 1);
       addAlert(
-        t(options?.successMessageKey ?? "realm-settings:userProfileSuccess"),
-        AlertVariant.success
+        t(options?.successMessageKey ?? "userProfileSuccess"),
+        AlertVariant.success,
       );
 
       return true;
     } catch (error) {
       setIsSaving(false);
-      addError(
-        options?.errorMessageKey ?? "realm-settings:userProfileError",
-        error
-      );
+      addError(options?.errorMessageKey ?? "userProfileError", error);
 
       return false;
     }

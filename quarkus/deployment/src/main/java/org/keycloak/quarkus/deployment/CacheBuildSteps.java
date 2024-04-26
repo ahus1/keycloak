@@ -25,7 +25,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.stream.Collectors;
-import javax.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ApplicationScoped;
 import org.infinispan.commons.util.FileLookupFactory;
 import org.keycloak.config.MetricsOptions;
 import org.keycloak.quarkus.runtime.KeycloakRecorder;
@@ -43,9 +43,9 @@ import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 
 public class CacheBuildSteps {
 
-    @Consume(KeycloakSessionFactoryPreInitBuildItem.class)
-    @Record(ExecutionTime.RUNTIME_INIT)
-    @BuildStep(onlyIf = IsLegacyStoreEnabled.class)
+    @Consume(ConfigBuildItem.class)
+    @Record(ExecutionTime.STATIC_INIT)
+    @BuildStep
     void configureInfinispan(KeycloakRecorder recorder, BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItems, ShutdownContextBuildItem shutdownContext) {
         String configFile = getConfigValue("kc.spi-connections-infinispan-quarkus-config-file").getValue();
 

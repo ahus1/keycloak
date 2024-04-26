@@ -12,12 +12,13 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
+import { adminClient } from "../../../admin-client";
 import { useAlerts } from "../../../components/alert/Alerts";
 import { useConfirmDialog } from "../../../components/confirm-dialog/ConfirmDialog";
-import { FormAccess } from "../../../components/form-access/FormAccess";
+import { FormAccess } from "../../../components/form/FormAccess";
 import { KeycloakSpinner } from "../../../components/keycloak-spinner/KeycloakSpinner";
 import { ViewHeader } from "../../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
+import { useFetch } from "../../../utils/useFetch";
 import { useParams } from "../../../utils/useParams";
 import { toAuthorizationTab } from "../../routes/AuthenticationTab";
 import {
@@ -61,16 +62,16 @@ const COMPONENTS: {
 export const isValidComponentType = (value: string) => value in COMPONENTS;
 
 export default function PolicyDetails() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { id, realm, policyId, policyType } = useParams<PolicyDetailsParams>();
   const navigate = useNavigate();
   const form = useForm();
   const { reset, handleSubmit } = form;
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const [policy, setPolicy] = useState<PolicyRepresentation>();
+  const isDisabled = policyType === "js";
 
   useFetch(
     async () => {
@@ -88,7 +89,7 @@ export default function PolicyDetails() {
         ]);
 
         if (!result[0]) {
-          throw new Error(t("common:notFound"));
+          throw new Error(t("notFound"));
         }
 
         return {
@@ -102,7 +103,7 @@ export default function PolicyDetails() {
       reset({ ...policy, policies });
       setPolicy(policy);
     },
-    [id, policyType, policyId]
+    [id, policyType, policyId],
   );
 
   const onSubmit = async (policy: Policy) => {
@@ -117,12 +118,12 @@ export default function PolicyDetails() {
       if (policyId) {
         await adminClient.clients.updatePolicy(
           { id, type: policyType, policyId },
-          policy
+          policy,
         );
       } else {
         const result = await adminClient.clients.createPolicy(
           { id, type: policyType },
-          policy
+          policy,
         );
         navigate(
           toPolicyDetails({
@@ -130,22 +131,22 @@ export default function PolicyDetails() {
             id,
             policyType,
             policyId: result.id!,
-          })
+          }),
         );
       }
       addAlert(
         t((policyId ? "update" : "create") + "PolicySuccess"),
-        AlertVariant.success
+        AlertVariant.success,
       );
     } catch (error) {
-      addError("clients:policySaveError", error);
+      addError("policySaveError", error);
     }
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:deletePolicy",
-    messageKey: "clients:deletePolicyConfirm",
-    continueButtonLabel: "clients:confirm",
+    titleKey: "deletePolicy",
+    messageKey: "deletePolicyConfirm",
+    continueButtonLabel: "confirm",
     onConfirm: async () => {
       try {
         await adminClient.clients.delPolicy({
@@ -155,7 +156,7 @@ export default function PolicyDetails() {
         addAlert(t("policyDeletedSuccess"), AlertVariant.success);
         navigate(toAuthorizationTab({ realm, clientId: id, tab: "policies" }));
       } catch (error) {
-        addError("clients:policyDeletedError", error);
+        addError("policyDeletedError", error);
       }
     },
   });
@@ -164,18 +165,20 @@ export default function PolicyDetails() {
     return <KeycloakSpinner />;
   }
 
-  const ComponentType = isValidComponentType(policyType)
-    ? COMPONENTS[policyType]
-    : COMPONENTS["js"];
+  function getComponentType() {
+    return isValidComponentType(policyType)
+      ? COMPONENTS[policyType]
+      : COMPONENTS["js"];
+  }
+
+  const ComponentType = getComponentType();
 
   return (
     <>
       <DeleteConfirm />
       <ViewHeader
         titleKey={
-          policyId
-            ? policy?.name!
-            : t("clients:createPolicyOfType", { policyType })
+          policyId ? policy?.name! : t("createPolicyOfType", { policyType })
         }
         dropdownItems={
           policyId
@@ -185,7 +188,7 @@ export default function PolicyDetails() {
                   data-testid="delete-policy"
                   onClick={() => toggleDeleteDialog()}
                 >
-                  {t("common:delete")}
+                  {t("delete")}
                 </DropdownItem>,
               ]
             : undefined
@@ -195,22 +198,23 @@ export default function PolicyDetails() {
         <FormAccess
           isHorizontal
           onSubmit={handleSubmit(onSubmit)}
-          role="view-clients"
+          role="anyone" // if you get this far it means you have access
         >
           <FormProvider {...form}>
-            <NameDescription prefix="policy" />
+            <NameDescription isDisabled={isDisabled} prefix="policy" />
             <ComponentType />
-            <LogicSelector />
+            <LogicSelector isDisabled={isDisabled} />
           </FormProvider>
           <ActionGroup>
             <div className="pf-u-mt-md">
               <Button
+                isDisabled={isDisabled}
                 variant={ButtonVariant.primary}
                 className="pf-u-mr-md"
                 type="submit"
                 data-testid="save"
               >
-                {t("common:save")}
+                {t("save")}
               </Button>
 
               <Button
@@ -227,7 +231,7 @@ export default function PolicyDetails() {
                   />
                 )}
               >
-                {t("common:cancel")}
+                {t("cancel")}
               </Button>
             </div>
           </ActionGroup>

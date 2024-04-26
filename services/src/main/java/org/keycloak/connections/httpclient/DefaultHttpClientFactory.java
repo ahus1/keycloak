@@ -110,8 +110,15 @@ public class DefaultHttpClientFactory implements HttpClientFactory {
             public InputStream get(String uri) throws IOException {
                 HttpGet request = new HttpGet(uri);
                 HttpResponse response = httpClient.execute(request);
+                int statusCode = response.getStatusLine().getStatusCode();
                 HttpEntity entity = response.getEntity();
-                if (entity == null) return null;
+                if (statusCode < 200 || statusCode >= 300) {
+                    EntityUtils.consumeQuietly(entity);
+                    throw new IOException("Unexpected HTTP status code " + response.getStatusLine().getStatusCode() + " when expecting 2xx");
+                }
+                if (entity == null) {
+                    throw new IOException("No content returned from HTTP call");
+                }
                 return entity.getContent();
 
             }
@@ -191,11 +198,11 @@ public class DefaultHttpClientFactory implements HttpClientFactory {
 
                     TruststoreProvider truststoreProvider = session.getProvider(TruststoreProvider.class);
                     boolean disableTruststoreProvider = truststoreProvider == null || truststoreProvider.getTruststore() == null;
-                    
+
                     if (disableTruststoreProvider) {
                     	logger.warn("TruststoreProvider is disabled");
                     } else {
-                        builder.hostnameVerification(HttpClientBuilder.HostnameVerificationPolicy.valueOf(truststoreProvider.getPolicy().name()));
+                        builder.hostnameVerification(truststoreProvider.getPolicy());
                         try {
                             builder.trustStore(truststoreProvider.getTruststore());
                         } catch (Exception e) {
@@ -207,7 +214,7 @@ public class DefaultHttpClientFactory implements HttpClientFactory {
                     	logger.warn("TrustManager is disabled");
                     	builder.disableTrustManager();
                     }
-                    
+
                     if (clientKeystore != null) {
                         clientKeystore = EnvUtil.replace(clientKeystore);
                         try {

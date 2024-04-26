@@ -9,9 +9,9 @@ import {
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
-import { useAdminClient } from "../../context/auth/AdminClient";
 
 type FormFields = {
   node: string;
@@ -30,13 +30,12 @@ export const AddHostDialog = ({
   onAdded,
   onClose,
 }: AddHostDialogProps) => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const {
     register,
     handleSubmit,
     formState: { isDirty, isValid },
   } = useForm<FormFields>();
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   async function onSubmit({ node }: FormFields) {
@@ -48,7 +47,7 @@ export const AddHostDialog = ({
       onAdded(node);
       addAlert(t("addedNodeSuccess"), AlertVariant.success);
     } catch (error) {
-      addError("clients:addedNodeFail", error);
+      addError("addedNodeFail", error);
     }
 
     onClose();
@@ -68,7 +67,7 @@ export const AddHostDialog = ({
           form="add-host-form"
           isDisabled={!isDirty || !isValid}
         >
-          {t("common:save")}
+          {t("save")}
         </Button>,
         <Button
           key="cancel"
@@ -76,7 +75,7 @@ export const AddHostDialog = ({
           variant={ButtonVariant.link}
           onClick={onClose}
         >
-          {t("common:cancel")}
+          {t("cancel")}
         </Button>,
       ]}
     >

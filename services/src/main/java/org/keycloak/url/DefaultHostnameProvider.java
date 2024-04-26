@@ -10,7 +10,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.urls.HostnameProvider;
 import org.keycloak.urls.UrlType;
 
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 
 public class DefaultHostnameProvider implements HostnameProvider {
@@ -26,6 +26,8 @@ public class DefaultHostnameProvider implements HostnameProvider {
     private URI realmUri;
 
     private URI adminUri;
+
+    private URI localAdminUri = URI.create("http://localhost:8080/auth");
 
     private final boolean forceBackendUrlToFrontendUrl;
 
@@ -57,6 +59,10 @@ public class DefaultHostnameProvider implements HostnameProvider {
     }
 
     private URI resolveUri(UriInfo originalUriInfo, UrlType type) {
+        if (type.equals(UrlType.LOCAL_ADMIN)) {
+            return localAdminUri;
+        }
+
         URI realmUri = getRealmUri();
         URI frontendUri = realmUri != null ? realmUri : this.frontendUri;
 

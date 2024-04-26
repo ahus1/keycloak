@@ -43,10 +43,10 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 
 import java.net.URI;
 import java.util.Objects;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 import java.util.concurrent.TimeUnit;
-import javax.ws.rs.core.*;
+import jakarta.ws.rs.core.*;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -146,6 +146,8 @@ public class IdpEmailVerificationAuthenticator extends AbstractIdpAuthenticator 
                     .setUser(existingUser)
                     .setAttribute(EmailTemplateProvider.IDENTITY_PROVIDER_BROKER_CONTEXT, brokerContext)
                     .sendConfirmIdentityBrokerLink(link, expirationInMinutes);
+
+            authSession.addRequiredAction(UserModel.RequiredAction.VERIFY_EMAIL);
 
             event.success();
         } catch (EmailException e) {

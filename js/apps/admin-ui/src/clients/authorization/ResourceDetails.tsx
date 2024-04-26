@@ -17,25 +17,27 @@ import { useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { HelpItem } from "ui-shared";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { FormAccess } from "../../components/form-access/FormAccess";
-import { HelpItem } from "ui-shared";
+import { FormAccess } from "../../components/form/FormAccess";
 import type { KeyValueType } from "../../components/key-value-form/key-value-convert";
 import { KeyValueInput } from "../../components/key-value-form/KeyValueInput";
 import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { MultiLineInput } from "../../components/multi-line-input/MultiLineInput";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
 import { convertFormValuesToObject, convertToFormValues } from "../../util";
+import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import { toAuthorizationTab } from "../routes/AuthenticationTab";
 import { ResourceDetailsParams, toResourceDetails } from "../routes/Resource";
 import { ScopePicker } from "./ScopePicker";
 
 import "./resource-details.css";
+import { useAccess } from "../../context/access/Access";
 
 type SubmittedResource = Omit<
   ResourceRepresentation,
@@ -45,14 +47,13 @@ type SubmittedResource = Omit<
 };
 
 export default function ResourceDetails() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const [client, setClient] = useState<ClientRepresentation>();
   const [resource, setResource] = useState<ResourceRepresentation>();
 
   const [permissions, setPermission] =
     useState<ResourceServerRepresentation[]>();
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
   const form = useForm<SubmittedResource>({
     mode: "onChange",
@@ -72,6 +73,10 @@ export default function ResourceDetails() {
     convertToFormValues(resource, setValue);
   };
 
+  const { hasAccess } = useAccess();
+
+  const isDisabled = !hasAccess("manage-authorization");
+
   useFetch(
     () =>
       Promise.all([
@@ -85,14 +90,14 @@ export default function ResourceDetails() {
       ]),
     ([client, resource, permissions]) => {
       if (!client) {
-        throw new Error(t("common:notFound"));
+        throw new Error(t("notFound"));
       }
       setClient(client);
       setPermission(permissions);
       setResource(resource);
       setupForm(resource);
     },
-    []
+    [],
   );
 
   const submit = async (submitted: SubmittedResource) => {
@@ -107,21 +112,22 @@ export default function ResourceDetails() {
       } else {
         const result = await adminClient.clients.createResource(
           { id },
-          resource
+          resource,
         );
+        setResource(resource);
         navigate(toResourceDetails({ realm, id, resourceId: result._id! }));
       }
       addAlert(
         t((resourceId ? "update" : "create") + "ResourceSuccess"),
-        AlertVariant.success
+        AlertVariant.success,
       );
     } catch (error) {
-      addError("clients:resourceSaveError", error);
+      addError("resourceSaveError", error);
     }
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:deleteResource",
+    titleKey: "deleteResource",
     children: (
       <>
         {t("deleteResourceConfirm")}
@@ -144,7 +150,7 @@ export default function ResourceDetails() {
         )}
       </>
     ),
-    continueButtonLabel: "clients:confirm",
+    continueButtonLabel: "confirm",
     onConfirm: async () => {
       try {
         await adminClient.clients.delResource({
@@ -154,7 +160,7 @@ export default function ResourceDetails() {
         addAlert(t("resourceDeletedSuccess"), AlertVariant.success);
         navigate(toAuthorizationTab({ realm, clientId: id, tab: "resources" }));
       } catch (error) {
-        addError("clients:resourceDeletedError", error);
+        addError("resourceDeletedError", error);
       }
     },
   });
@@ -167,16 +173,17 @@ export default function ResourceDetails() {
     <>
       <DeleteConfirm />
       <ViewHeader
-        titleKey={resourceId ? resource?.name! : "clients:createResource"}
+        titleKey={resourceId ? resource?.name! : "createResource"}
         dropdownItems={
           resourceId
             ? [
                 <DropdownItem
                   key="delete"
                   data-testid="delete-resource"
+                  isDisabled={isDisabled}
                   onClick={() => toggleDeleteDialog()}
                 >
-                  {t("common:delete")}
+                  {t("delete")}
                 </DropdownItem>,
               ]
             : undefined
@@ -186,7 +193,7 @@ export default function ResourceDetails() {
         <FormProvider {...form}>
           <FormAccess
             isHorizontal
-            role="view-clients"
+            role="manage-authorization"
             className="keycloak__resource-details__form"
             onSubmit={handleSubmit(submit)}
           >
@@ -194,10 +201,7 @@ export default function ResourceDetails() {
               label={t("owner")}
               fieldId="owner"
               labelIcon={
-                <HelpItem
-                  helpText={t("clients-help:owner")}
-                  fieldLabelId="clients:owner"
-                />
+                <HelpItem helpText={t("ownerHelp")} fieldLabelId="owner" />
               }
             >
               <KeycloakTextInput
@@ -207,15 +211,15 @@ export default function ResourceDetails() {
               />
             </FormGroup>
             <FormGroup
-              label={t("common:name")}
+              label={t("name")}
               fieldId="name"
               labelIcon={
                 <HelpItem
-                  helpText={t("clients-help:resourceName")}
+                  helpText={t("resourceNameHelp")}
                   fieldLabelId="name"
                 />
               }
-              helperTextInvalid={t("common:required")}
+              helperTextInvalid={t("required")}
               validated={
                 errors.name ? ValidatedOptions.error : ValidatedOptions.default
               }
@@ -235,10 +239,7 @@ export default function ResourceDetails() {
               label={t("displayName")}
               fieldId="displayName"
               labelIcon={
-                <HelpItem
-                  helpText={t("clients-help:displayName")}
-                  fieldLabelId="name"
-                />
+                <HelpItem helpText={t("displayNameHelp")} fieldLabelId="name" />
               }
             >
               <KeycloakTextInput
@@ -251,7 +252,7 @@ export default function ResourceDetails() {
               fieldId="type"
               labelIcon={
                 <HelpItem
-                  helpText={t("clients-help:type")}
+                  helpText={t("resourceDetailsTypeHelp")}
                   fieldLabelId="type"
                 />
               }
@@ -262,17 +263,14 @@ export default function ResourceDetails() {
               label={t("uris")}
               fieldId="uris"
               labelIcon={
-                <HelpItem
-                  helpText={t("clients-help:uris")}
-                  fieldLabelId="clients:uris"
-                />
+                <HelpItem helpText={t("urisHelp")} fieldLabelId="uris" />
               }
             >
               <MultiLineInput
                 name="uris"
                 type="url"
                 aria-label={t("uris")}
-                addButtonLabel="clients:addUri"
+                addButtonLabel="addUri"
               />
             </FormGroup>
             <ScopePicker clientId={id} />
@@ -280,10 +278,7 @@ export default function ResourceDetails() {
               label={t("iconUri")}
               fieldId="iconUri"
               labelIcon={
-                <HelpItem
-                  helpText={t("clients-help:iconUri")}
-                  fieldLabelId="clients:iconUri"
-                />
+                <HelpItem helpText={t("iconUriHelp")} fieldLabelId="iconUri" />
               }
             >
               <KeycloakTextInput
@@ -297,8 +292,8 @@ export default function ResourceDetails() {
               label={t("ownerManagedAccess")}
               labelIcon={
                 <HelpItem
-                  helpText={t("clients-help:ownerManagedAccess")}
-                  fieldLabelId="clients:ownerManagedAccess"
+                  helpText={t("ownerManagedAccessHelp")}
+                  fieldLabelId="ownerManagedAccess"
                 />
               }
               fieldId="ownerManagedAccess"
@@ -310,8 +305,8 @@ export default function ResourceDetails() {
                 render={({ field }) => (
                   <Switch
                     id="ownerManagedAccess"
-                    label={t("common:on")}
-                    labelOff={t("common:off")}
+                    label={t("on")}
+                    labelOff={t("off")}
                     isChecked={field.value}
                     onChange={field.onChange}
                     aria-label={t("ownerManagedAccess")}
@@ -325,13 +320,13 @@ export default function ResourceDetails() {
               label={t("resourceAttribute")}
               labelIcon={
                 <HelpItem
-                  helpText={t("clients-help:resourceAttribute")}
-                  fieldLabelId="clients:resourceAttribute"
+                  helpText={t("resourceAttributeHelp")}
+                  fieldLabelId="resourceAttribute"
                 />
               }
               fieldId="resourceAttribute"
             >
-              <KeyValueInput name="attributes" />
+              <KeyValueInput name="attributes" isDisabled={isDisabled} />
             </FormGroup>
             <ActionGroup>
               <div className="pf-u-mt-md">
@@ -340,7 +335,7 @@ export default function ResourceDetails() {
                   type="submit"
                   data-testid="save"
                 >
-                  {t("common:save")}
+                  {t("save")}
                 </Button>
 
                 <Button
@@ -357,7 +352,7 @@ export default function ResourceDetails() {
                     ></Link>
                   )}
                 >
-                  {t("common:cancel")}
+                  {t("cancel")}
                 </Button>
               </div>
             </ActionGroup>

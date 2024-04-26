@@ -27,15 +27,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.logging.Logger;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.broker.social.SocialIdentityProvider;
@@ -56,9 +56,9 @@ import org.keycloak.representations.account.AccountLinkUriRepresentation;
 import org.keycloak.representations.account.LinkedAccountRepresentation;
 import org.keycloak.services.ErrorResponse;
 import org.keycloak.services.Urls;
+import org.keycloak.services.cors.Cors;
 import org.keycloak.services.managers.Auth;
 import org.keycloak.services.messages.Messages;
-import org.keycloak.services.resources.Cors;
 import org.keycloak.services.validation.Validation;
 
 import static org.keycloak.models.Constants.ACCOUNT_CONSOLE_CLIENT_ID;
@@ -115,9 +115,9 @@ public class LinkedAccountsResource {
 
     private LinkedAccountRepresentation toLinkedAccountRepresentation(IdentityProviderModel provider, Set<String> socialIds,
                                                                       Stream<FederatedIdentityModel> identities) {
-        String providerId = provider.getAlias();
+        String providerAlias = provider.getAlias();
 
-        FederatedIdentityModel identity = getIdentity(identities, providerId);
+        FederatedIdentityModel identity = getIdentity(identities, providerAlias);
 
         String displayName = KeycloakModelUtils.getIdentityProviderDisplayName(session, provider);
         String guiOrder = provider.getConfig() != null ? provider.getConfig().get("guiOrder") : null;
@@ -125,7 +125,7 @@ public class LinkedAccountsResource {
         LinkedAccountRepresentation rep = new LinkedAccountRepresentation();
         rep.setConnected(identity != null);
         rep.setSocial(socialIds.contains(provider.getProviderId()));
-        rep.setProviderAlias(providerId);
+        rep.setProviderAlias(providerAlias);
         rep.setDisplayName(displayName);
         rep.setGuiOrder(guiOrder);
         rep.setProviderName(provider.getAlias());
@@ -135,16 +135,16 @@ public class LinkedAccountsResource {
         return rep;
     }
 
-    private FederatedIdentityModel getIdentity(Stream<FederatedIdentityModel> identities, String providerId) {
-        return identities.filter(model -> Objects.equals(model.getIdentityProvider(), providerId))
+    private FederatedIdentityModel getIdentity(Stream<FederatedIdentityModel> identities, String providerAlias) {
+        return identities.filter(model -> Objects.equals(model.getIdentityProvider(), providerAlias))
                 .findFirst().orElse(null);
     }
     
     @GET
-    @Path("/{providerId}")
+    @Path("/{providerAlias}")
     @Produces(MediaType.APPLICATION_JSON)
     @Deprecated
-    public Response buildLinkedAccountURI(@PathParam("providerId") String providerId, 
+    public Response buildLinkedAccountURI(@PathParam("providerAlias") String providerAlias,
                                      @QueryParam("redirectUri") String redirectUri) {
         auth.require(AccountRoles.MANAGE_ACCOUNT);
         
@@ -152,7 +152,7 @@ public class LinkedAccountsResource {
             ErrorResponse.error(Messages.INVALID_REDIRECT_URI, Response.Status.BAD_REQUEST);
         }
         
-        String errorMessage = checkCommonPreconditions(providerId);
+        String errorMessage = checkCommonPreconditions(providerAlias);
         if (errorMessage != null) {
             throw ErrorResponse.error(errorMessage, Response.Status.BAD_REQUEST);
         }
@@ -163,10 +163,10 @@ public class LinkedAccountsResource {
         try {
             String nonce = UUID.randomUUID().toString();
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            String input = nonce + auth.getSession().getId() +  ACCOUNT_CONSOLE_CLIENT_ID + providerId;
+            String input = nonce + auth.getSession().getId() +  ACCOUNT_CONSOLE_CLIENT_ID + providerAlias;
             byte[] check = md.digest(input.getBytes(StandardCharsets.UTF_8));
             String hash = Base64Url.encode(check);
-            URI linkUri = Urls.identityProviderLinkRequest(this.session.getContext().getUri().getBaseUri(), providerId, realm.getName());
+            URI linkUri = Urls.identityProviderLinkRequest(this.session.getContext().getUri().getBaseUri(), providerAlias, realm.getName());
             linkUri = UriBuilder.fromUri(linkUri)
                     .queryParam("nonce", nonce)
                     .queryParam("hash", hash)
@@ -189,17 +189,17 @@ public class LinkedAccountsResource {
     }
     
     @DELETE
-    @Path("/{providerId}")
+    @Path("/{providerAlias}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response removeLinkedAccount(@PathParam("providerId") String providerId) {
+    public Response removeLinkedAccount(@PathParam("providerAlias") String providerAlias) {
         auth.require(AccountRoles.MANAGE_ACCOUNT);
         
-        String errorMessage = checkCommonPreconditions(providerId);
+        String errorMessage = checkCommonPreconditions(providerAlias);
         if (errorMessage != null) {
             throw ErrorResponse.error(errorMessage, Response.Status.BAD_REQUEST);
         }
         
-        FederatedIdentityModel link = session.users().getFederatedIdentity(realm, user, providerId);
+        FederatedIdentityModel link = session.users().getFederatedIdentity(realm, user, providerAlias);
         if (link == null) {
             throw ErrorResponse.error(Messages.FEDERATED_IDENTITY_NOT_ACTIVE, Response.Status.BAD_REQUEST);
         }
@@ -208,10 +208,10 @@ public class LinkedAccountsResource {
         if (!(session.users().getFederatedIdentitiesStream(realm, user).count() > 1 || user.getFederationLink() != null || isPasswordSet())) {
             throw ErrorResponse.error(Messages.FEDERATED_IDENTITY_REMOVING_LAST_PROVIDER, Response.Status.BAD_REQUEST);
         }
-        
-        session.users().removeFederatedIdentity(realm, user, providerId);
 
-        logger.debugv("Social provider {0} removed successfully from user {1}", providerId, user.getUsername());
+        session.users().removeFederatedIdentity(realm, user, providerAlias);
+
+        logger.debugv("Social provider {0} removed successfully from user {1}", providerAlias, user.getUsername());
 
         event.event(EventType.REMOVE_FEDERATED_IDENTITY).client(auth.getClient()).user(auth.getUser())
                 .detail(Details.USERNAME, auth.getUser().getUsername())
@@ -222,14 +222,14 @@ public class LinkedAccountsResource {
         return Cors.add(request, Response.noContent()).auth().allowedOrigins(auth.getToken()).build();
     }
     
-    private String checkCommonPreconditions(String providerId) {
+    private String checkCommonPreconditions(String providerAlias) {
         auth.require(AccountRoles.MANAGE_ACCOUNT);
         
-        if (Validation.isEmpty(providerId)) {
+        if (Validation.isEmpty(providerAlias)) {
             return Messages.MISSING_IDENTITY_PROVIDER;
         }
         
-        if (!isValidProvider(providerId)) {
+        if (!isValidProvider(providerAlias)) {
             return Messages.IDENTITY_PROVIDER_NOT_FOUND;
         }
         
@@ -244,7 +244,7 @@ public class LinkedAccountsResource {
         return user.credentialManager().isConfiguredFor(PasswordCredentialModel.TYPE);
     }
     
-    private boolean isValidProvider(String providerId) {
-        return realm.getIdentityProvidersStream().anyMatch(model -> Objects.equals(model.getAlias(), providerId));
+    private boolean isValidProvider(String providerAlias) {
+        return realm.getIdentityProvidersStream().anyMatch(model -> Objects.equals(model.getAlias(), providerAlias));
     }
 }

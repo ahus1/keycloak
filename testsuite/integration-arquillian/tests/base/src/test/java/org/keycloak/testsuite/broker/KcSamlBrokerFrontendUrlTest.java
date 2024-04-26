@@ -20,7 +20,7 @@ import org.keycloak.testsuite.util.ReverseProxy;
 import org.keycloak.testsuite.util.SamlClient;
 import org.keycloak.testsuite.util.SamlClientBuilder;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -114,7 +114,11 @@ public final class KcSamlBrokerFrontendUrlTest extends AbstractBrokerTest {
         updateExecutions(AbstractBrokerTest::disableUpdateProfileOnFirstLogin);
         createUser(bc.consumerRealmName(), "consumer", "password", "FirstName", "LastName", "consumer@localhost.com");
 
-        driver.navigate().to(proxy.getUrl() + "/realms/consumer/account");
+        oauth.clientId("broker-app");
+        oauth.realm(bc.consumerRealmName());
+        oauth.baseUrl(proxy.getUrl());
+        oauth.openLoginForm();
+
         log.debug("Clicking social " + bc.getIDPAlias());
         loginPage.clickSocial(bc.getIDPAlias());
         waitForPage(driver, "sign in to", true);
@@ -128,8 +132,8 @@ public final class KcSamlBrokerFrontendUrlTest extends AbstractBrokerTest {
         }
 
         loginPage.login(bc.getUserLogin(), bc.getUserPassword());
-        waitForPage(driver, "account management", true);
-        accountUpdateProfilePage.assertCurrent();
+        waitForPage(driver, "AUTH_RESPONSE", true);
+        appPage.assertCurrent();
     }
 
     @Test

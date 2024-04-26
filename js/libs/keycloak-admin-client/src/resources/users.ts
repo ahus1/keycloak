@@ -1,16 +1,19 @@
-import Resource from "./resource.js";
-import type UserRepresentation from "../defs/userRepresentation.js";
-import type UserConsentRepresentation from "../defs/userConsentRepresentation.js";
-import type UserSessionRepresentation from "../defs/userSessionRepresentation.js";
 import type { KeycloakAdminClient } from "../client.js";
-import type MappingsRepresentation from "../defs/mappingsRepresentation.js";
-import type RoleRepresentation from "../defs/roleRepresentation.js";
-import type { RoleMappingPayload } from "../defs/roleRepresentation.js";
-import type { RequiredActionAlias } from "../defs/requiredActionProviderRepresentation.js";
+import type CredentialRepresentation from "../defs/credentialRepresentation.js";
 import type FederatedIdentityRepresentation from "../defs/federatedIdentityRepresentation.js";
 import type GroupRepresentation from "../defs/groupRepresentation.js";
-import type CredentialRepresentation from "../defs/credentialRepresentation.js";
-import type UserProfileConfig from "../defs/userProfileConfig.js";
+import type MappingsRepresentation from "../defs/mappingsRepresentation.js";
+import type { RequiredActionAlias } from "../defs/requiredActionProviderRepresentation.js";
+import type RoleRepresentation from "../defs/roleRepresentation.js";
+import type { RoleMappingPayload } from "../defs/roleRepresentation.js";
+import type UserConsentRepresentation from "../defs/userConsentRepresentation.js";
+import type {
+  UserProfileConfig,
+  UserProfileMetadata,
+} from "../defs/userProfileMetadata.js";
+import type UserRepresentation from "../defs/userRepresentation.js";
+import type UserSessionRepresentation from "../defs/userSessionRepresentation.js";
+import Resource from "./resource.js";
 
 interface SearchQuery {
   search?: string;
@@ -48,7 +51,7 @@ export class Users extends Resource<{ realm?: string }> {
    */
 
   public findOne = this.makeRequest<
-    { id: string },
+    { id: string; userProfileMetadata?: boolean },
     UserRepresentation | undefined
   >({
     method: "GET",
@@ -87,8 +90,13 @@ export class Users extends Resource<{ realm?: string }> {
     {
       method: "PUT",
       path: "/profile",
-    }
+    },
   );
+
+  public getProfileMetadata = this.makeRequest<{}, UserProfileMetadata>({
+    method: "GET",
+    path: "/profile/metadata",
+  });
 
   /**
    * role mappings
@@ -248,7 +256,7 @@ export class Users extends Resource<{ realm?: string }> {
       method: "PUT",
       path: "/{id}/groups/{groupId}",
       urlParamKeys: ["id", "groupId"],
-    }
+    },
   );
 
   public delFromGroup = this.makeRequest<

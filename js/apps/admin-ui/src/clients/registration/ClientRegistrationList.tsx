@@ -4,16 +4,16 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
 import {
   Action,
   KeycloakDataTable,
 } from "../../components/table-toolbar/KeycloakDataTable";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
+import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
-
 import { toRegistrationProvider } from "../routes/AddRegistrationProvider";
 import { ClientRegistrationParams } from "../routes/ClientRegistration";
 import { AddProviderDialog } from "./AddProviderDialog";
@@ -44,11 +44,10 @@ const DetailLink = (comp: ComponentRepresentation) => {
 export const ClientRegistrationList = ({
   subType,
 }: ClientRegistrationListProps) => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { subTab } = useParams<ClientRegistrationParams>();
   const navigate = useNavigate();
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
   const { realm } = useRealm();
   const [policies, setPolicies] = useState<ComponentRepresentation[]>([]);
@@ -62,15 +61,15 @@ export const ClientRegistrationList = ({
         type: "org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy",
       }),
     (policies) => setPolicies(policies.filter((p) => p.subType === subType)),
-    [selectedPolicy]
+    [selectedPolicy],
   );
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:clientRegisterPolicyDeleteConfirmTitle",
+    titleKey: "clientRegisterPolicyDeleteConfirmTitle",
     messageKey: t("clientRegisterPolicyDeleteConfirm", {
       name: selectedPolicy?.name,
     }),
-    continueButtonLabel: "common:delete",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
@@ -81,7 +80,7 @@ export const ClientRegistrationList = ({
         addAlert(t("clientRegisterPolicyDeleteSuccess"));
         setSelectedPolicy(undefined);
       } catch (error) {
-        addError("clients:clientRegisterPolicyDeleteError", error);
+        addError("clientRegisterPolicyDeleteError", error);
       }
     },
   });
@@ -96,7 +95,7 @@ export const ClientRegistrationList = ({
                 realm,
                 subTab: subTab || "anonymous",
                 providerId,
-              })
+              }),
             )
           }
           toggleDialog={toggleAddDialog}
@@ -104,19 +103,23 @@ export const ClientRegistrationList = ({
       )}
       <DeleteConfirm />
       <KeycloakDataTable
-        ariaLabelKey="clients:initialAccessToken"
-        searchPlaceholderKey="clients:searchInitialAccessToken"
+        ariaLabelKey="clientRegistration"
+        searchPlaceholderKey="searchClientRegistration"
+        data-testid={`clientRegistration-${subType}`}
         loader={policies}
         toolbarItem={
           <ToolbarItem>
-            <Button data-testid="createPolicy" onClick={toggleAddDialog}>
+            <Button
+              data-testid={`createPolicy-${subType}`}
+              onClick={toggleAddDialog}
+            >
               {t("createPolicy")}
             </Button>
           </ToolbarItem>
         }
         actions={[
           {
-            title: t("common:delete"),
+            title: t("delete"),
             onRowClick: (policy) => {
               setSelectedPolicy(policy);
               toggleDeleteDialog();
@@ -126,12 +129,12 @@ export const ClientRegistrationList = ({
         columns={[
           {
             name: "name",
-            displayKey: "common:name",
+            displayKey: "name",
             cellRenderer: DetailLink,
           },
           {
             name: "providerId",
-            displayKey: "clients:providerId",
+            displayKey: "providerId",
           },
         ]}
       />

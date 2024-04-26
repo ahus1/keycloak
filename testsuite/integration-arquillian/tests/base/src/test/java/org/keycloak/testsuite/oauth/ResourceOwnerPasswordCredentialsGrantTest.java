@@ -39,6 +39,7 @@ import org.keycloak.events.Errors;
 import org.keycloak.jose.jws.JWSHeader;
 import org.keycloak.jose.jws.JWSInput;
 import org.keycloak.models.ClientScopeModel;
+import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.TimeBasedOTP;
@@ -53,7 +54,6 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.testsuite.AbstractKeycloakTest;
 import org.keycloak.testsuite.Assert;
 import org.keycloak.testsuite.AssertEvents;
-import org.keycloak.testsuite.ProfileAssume;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.util.ClientBuilder;
@@ -65,9 +65,9 @@ import org.keycloak.testsuite.util.TokenSignatureUtil;
 import org.keycloak.testsuite.util.UserBuilder;
 import org.keycloak.testsuite.util.UserManager;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -133,25 +133,20 @@ public class ResourceOwnerPasswordCredentialsGrantTest extends AbstractKeycloakT
                 .password("password");
         realm.user(defaultUser);
 
-        userId = KeycloakModelUtils.generateId();
         UserRepresentation user = UserBuilder.create()
-                .id(userId)
                 .username("direct-login")
                 .email("direct-login@localhost")
                 .password("password")
                 .build();
         realm.user(user);
 
-        userId2 = KeycloakModelUtils.generateId();
         UserRepresentation user2 = UserBuilder.create()
-                .id(userId2)
                 .username("direct-login-otp")
                 .password("password")
                 .totpSecret("totpSecret")
                 .build();
         realm.user(user2);
 
-        userIdMultipleOTPs = KeycloakModelUtils.generateId();
         UserBuilder userBuilderMultipleOTPs = UserBuilder.create()
                 .id(userIdMultipleOTPs)
                 .username("direct-login-multiple-otps")
@@ -161,6 +156,14 @@ public class ResourceOwnerPasswordCredentialsGrantTest extends AbstractKeycloakT
         realm.user(userBuilderMultipleOTPs.build());
 
         testRealms.add(realm.build());
+    }
+
+    @Override
+    public void importTestRealms() {
+        super.importTestRealms();
+        userIdMultipleOTPs = adminClient.realm("test").users().search("direct-login-multiple-otps", true).get(0).getId();
+        userId = adminClient.realm("test").users().search("direct-login", true).get(0).getId();
+        userId2 = adminClient.realm("test").users().search("direct-login-otp", true).get(0).getId();
     }
 
     @Test
@@ -347,12 +350,12 @@ public class ResourceOwnerPasswordCredentialsGrantTest extends AbstractKeycloakT
 
     @Test
     public void grantRequest_ClientES256_RealmPS256() throws Exception {
-    	conductGrantRequest(Algorithm.HS256, Algorithm.ES256, Algorithm.PS256);
+        conductGrantRequest(Constants.INTERNAL_SIGNATURE_ALGORITHM, Algorithm.ES256, Algorithm.PS256);
     }
 
     @Test
     public void grantRequest_ClientPS256_RealmES256() throws Exception {
-    	conductGrantRequest(Algorithm.HS256, Algorithm.PS256, Algorithm.ES256);
+        conductGrantRequest(Constants.INTERNAL_SIGNATURE_ALGORITHM, Algorithm.PS256, Algorithm.ES256);
     }
 
     private void conductGrantRequest(String expectedRefreshAlg, String expectedAccessAlg, String realmTokenAlg) throws Exception {
@@ -744,11 +747,6 @@ public class ResourceOwnerPasswordCredentialsGrantTest extends AbstractKeycloakT
     }
 
     private int getAuthenticationSessionsCount() {
-        if (ProfileAssume.isFeatureEnabled(Profile.Feature.MAP_STORAGE)) {
-            // Currently, no access to the authentication sessions is available for map storage.
-            // By return a constant, all tests in this test class can still pass.
-            return 0;
-        }
         return testingClient.testing().cache(InfinispanConnectionProvider.AUTHENTICATION_SESSIONS_CACHE_NAME).size();
     }
 }

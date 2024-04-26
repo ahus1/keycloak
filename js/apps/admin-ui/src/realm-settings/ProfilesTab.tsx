@@ -1,37 +1,39 @@
-import { useState } from "react";
-import { omit } from "lodash-es";
+import type ClientProfileRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfileRepresentation";
+import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import {
   ActionGroup,
   AlertVariant,
   Button,
   ButtonVariant,
-  FormGroup,
-  Label,
-  PageSection,
-  ToolbarItem,
   Divider,
   Flex,
   FlexItem,
+  FormGroup,
+  Label,
+  PageSection,
   Radio,
   Title,
+  ToolbarItem,
 } from "@patternfly/react-core";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { omit } from "lodash-es";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+
+import { adminClient } from "../admin-client";
+import { useAlerts } from "../components/alert/Alerts";
+import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
+import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
 import {
   Action,
   KeycloakDataTable,
 } from "../components/table-toolbar/KeycloakDataTable";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import { useTranslation } from "react-i18next";
-import { useAdminClient, useFetch } from "../context/auth/AdminClient";
-import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { useRealm } from "../context/realm-context/RealmContext";
-import { useAlerts } from "../components/alert/Alerts";
 import { prettyPrintJSON } from "../util";
-import { Link } from "react-router-dom";
+import { useFetch } from "../utils/useFetch";
 import { toAddClientProfile } from "./routes/AddClientProfile";
-import type ClientProfileRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfileRepresentation";
 import { toClientProfile } from "./routes/ClientProfile";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
 
 import "./realm-settings-section.css";
 
@@ -40,8 +42,7 @@ type ClientProfile = ClientProfileRepresentation & {
 };
 
 export default function ProfilesTab() {
-  const { t } = useTranslation("realm-settings");
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
   const [tableProfiles, setTableProfiles] = useState<ClientProfile[]>();
@@ -64,7 +65,7 @@ export default function ProfilesTab() {
         (globalProfiles) => ({
           ...globalProfiles,
           global: true,
-        })
+        }),
       );
 
       const profiles = allProfiles.profiles?.map((profiles) => ({
@@ -76,13 +77,13 @@ export default function ProfilesTab() {
       setTableProfiles(allClientProfiles || []);
       setCode(JSON.stringify(allClientProfiles, null, 2));
     },
-    [key]
+    [key],
   );
 
   const loader = async () => tableProfiles ?? [];
 
   const normalizeProfile = (
-    profile: ClientProfile
+    profile: ClientProfile,
   ): ClientProfileRepresentation => omit(profile, "global");
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
@@ -95,10 +96,11 @@ export default function ProfilesTab() {
     onConfirm: async () => {
       const updatedProfiles = tableProfiles
         ?.filter(
-          (profile) => profile.name !== selectedProfile?.name && !profile.global
+          (profile) =>
+            profile.name !== selectedProfile?.name && !profile.global,
         )
         .map<ClientProfileRepresentation>((profile) =>
-          normalizeProfile(profile)
+          normalizeProfile(profile),
         );
 
       try {
@@ -150,13 +152,10 @@ export default function ProfilesTab() {
           profiles: changedProfiles,
           globalProfiles: changedGlobalProfiles,
         });
-        addAlert(
-          t("realm-settings:updateClientProfilesSuccess"),
-          AlertVariant.success
-        );
+        addAlert(t("updateClientProfilesSuccess"), AlertVariant.success);
         setKey(key + 1);
       } catch (error) {
-        addError("realm-settings:updateClientProfilesError", error);
+        addError("updateClientProfilesError", error);
       }
     } catch (error) {
       console.warn("Invalid json, ignoring value using {}");
@@ -201,8 +200,8 @@ export default function ProfilesTab() {
       {!show ? (
         <KeycloakDataTable
           key={tableProfiles.length}
-          ariaLabelKey="realm-settings:profiles"
-          searchPlaceholderKey="realm-settings:clientProfileSearch"
+          ariaLabelKey="profiles"
+          searchPlaceholderKey="clientProfileSearch"
           loader={loader}
           toolbarItem={
             <ToolbarItem>
@@ -223,7 +222,7 @@ export default function ProfilesTab() {
           isRowDisabled={(value) => value.global}
           actions={[
             {
-              title: t("common:delete"),
+              title: t("delete"),
               onRowClick: (profile) => {
                 setSelectedProfile(profile);
                 toggleDeleteDialog();
@@ -233,7 +232,7 @@ export default function ProfilesTab() {
           columns={[
             {
               name: "name",
-              displayKey: t("common:name"),
+              displayKey: t("name"),
               cellRenderer: cellFormatter,
             },
             {

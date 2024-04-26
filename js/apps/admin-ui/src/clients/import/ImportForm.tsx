@@ -1,3 +1,5 @@
+import { fetchWithError } from "@keycloak/keycloak-admin-client";
+import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
 import { Language } from "@patternfly/react-code-editor";
 import {
   ActionGroup,
@@ -11,14 +13,12 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
-import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
-
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
-import { FormAccess } from "../../components/form-access/FormAccess";
+import { FormAccess } from "../../components/form/FormAccess";
 import { FileUploadForm } from "../../components/json-file-upload/FileUploadForm";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import {
   addTrailingSlash,
@@ -26,18 +26,17 @@ import {
   convertToFormValues,
 } from "../../util";
 import { getAuthorizationHeaders } from "../../utils/getAuthorizationHeaders";
-import { CapabilityConfig } from "../add/CapabilityConfig";
 import { ClientDescription } from "../ClientDescription";
 import { FormFields } from "../ClientDetails";
+import { CapabilityConfig } from "../add/CapabilityConfig";
 import { toClient } from "../routes/Client";
 import { toClients } from "../routes/Clients";
 
 const isXml = (text: string) => text.match(/(<.[^(><.)]+>)/g);
 
 export default function ImportForm() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
   const form = useForm<FormFields>();
   const { register, handleSubmit, setValue } = form;
@@ -52,31 +51,31 @@ export default function ImportForm() {
       convertToFormValues(parsed, setValue);
       setImported(parsed);
     } catch (error) {
-      addError("clients:importParseError", error);
+      addError("importParseError", error);
     }
   };
 
   async function parseFileContents(
-    contents: string
+    contents: string,
   ): Promise<ClientRepresentation> {
     if (!isXml(contents)) {
       return JSON.parse(contents);
     }
 
-    const response = await fetch(
+    const response = await fetchWithError(
       `${addTrailingSlash(
-        adminClient.baseUrl
+        adminClient.baseUrl,
       )}admin/realms/${realm}/client-description-converter`,
       {
         method: "POST",
         body: contents,
         headers: getAuthorizationHeaders(await adminClient.getAccessToken()),
-      }
+      },
     );
 
     if (!response.ok) {
       throw new Error(
-        `Server responded with invalid status: ${response.statusText}`
+        `Server responded with invalid status: ${response.statusText}`,
       );
     }
 
@@ -95,16 +94,13 @@ export default function ImportForm() {
       addAlert(t("clientImportSuccess"), AlertVariant.success);
       navigate(toClient({ realm, clientId: newClient.id, tab: "settings" }));
     } catch (error) {
-      addError("clients:clientImportError", error);
+      addError("clientImportError", error);
     }
   };
 
   return (
     <>
-      <ViewHeader
-        titleKey="clients:importClient"
-        subKey="clients:clientsExplain"
-      />
+      <ViewHeader titleKey="importClient" subKey="clientsExplain" />
       <PageSection variant="light">
         <FormAccess
           isHorizontal
@@ -116,11 +112,11 @@ export default function ImportForm() {
               id="realm-file"
               language={Language.json}
               extension=".json,.xml"
-              helpText={t("common-help:helpFileUploadClient")}
+              helpText={t("helpFileUploadClient")}
               onChange={handleFileChange}
             />
             <ClientDescription hasConfigureAccess />
-            <FormGroup label={t("common:type")} fieldId="kc-type">
+            <FormGroup label={t("type")} fieldId="kc-type">
               <KeycloakTextInput
                 id="kc-type"
                 isReadOnly
@@ -130,7 +126,7 @@ export default function ImportForm() {
             <CapabilityConfig unWrap={true} />
             <ActionGroup>
               <Button variant="primary" type="submit">
-                {t("common:save")}
+                {t("save")}
               </Button>
               <Button
                 variant="link"
@@ -138,7 +134,7 @@ export default function ImportForm() {
                   <Link {...props} to={toClients({ realm })} />
                 )}
               >
-                {t("common:cancel")}
+                {t("cancel")}
               </Button>
             </ActionGroup>
           </FormProvider>

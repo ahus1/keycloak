@@ -13,16 +13,18 @@ import { useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { HelpItem } from "ui-shared";
+
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
 import { DynamicComponents } from "../../components/dynamic/DynamicComponents";
-import { FormAccess } from "../../components/form-access/FormAccess";
-import { HelpItem } from "ui-shared";
+import { FormAccess } from "../../components/form/FormAccess";
 import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
+import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import {
   RegistrationProviderParams,
@@ -31,7 +33,7 @@ import {
 import { toClientRegistration } from "../routes/ClientRegistration";
 
 export default function DetailProvider() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const { id, providerId, subTab } = useParams<RegistrationProviderParams>();
   const navigate = useNavigate();
   const form = useForm<ComponentRepresentation>({
@@ -45,7 +47,6 @@ export default function DetailProvider() {
     formState: { errors },
   } = form;
 
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
   const [provider, setProvider] = useState<ComponentTypeRepresentation>();
@@ -63,7 +64,7 @@ export default function DetailProvider() {
       setParentId(realm?.id || "");
       reset(data || { providerId });
     },
-    []
+    [],
   );
 
   const providerName = useWatch({ control, defaultValue: "", name: "name" });
@@ -72,7 +73,7 @@ export default function DetailProvider() {
     if (component.config)
       Object.entries(component.config).forEach(
         ([key, value]) =>
-          (component.config![key] = Array.isArray(value) ? value : [value])
+          (component.config![key] = Array.isArray(value) ? value : [value]),
       );
     try {
       const updatedComponent = {
@@ -91,16 +92,16 @@ export default function DetailProvider() {
       }
       addAlert(t(`provider${id ? "Updated" : "Create"}Success`));
     } catch (error) {
-      addError(`clients:provider${id ? "Updated" : "Create"}Error`, error);
+      addError(`provider${id ? "Updated" : "Create"}Error`, error);
     }
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:clientRegisterPolicyDeleteConfirmTitle",
+    titleKey: "clientRegisterPolicyDeleteConfirmTitle",
     messageKey: t("clientRegisterPolicyDeleteConfirm", {
       name: providerName,
     }),
-    continueButtonLabel: "common:delete",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
@@ -111,7 +112,7 @@ export default function DetailProvider() {
         addAlert(t("clientRegisterPolicyDeleteSuccess"));
         navigate(toClientRegistration({ realm, subTab }));
       } catch (error) {
-        addError("clients:clientRegisterPolicyDeleteError", error);
+        addError("clientRegisterPolicyDeleteError", error);
       }
     },
   });
@@ -123,7 +124,7 @@ export default function DetailProvider() {
   return (
     <>
       <ViewHeader
-        titleKey={id ? providerName! : "clients:createPolicy"}
+        titleKey={id ? providerName! : "createPolicy"}
         subKey={id}
         dropdownItems={
           id
@@ -133,7 +134,7 @@ export default function DetailProvider() {
                   key="delete"
                   onClick={toggleDeleteDialog}
                 >
-                  {t("common:delete")}
+                  {t("delete")}
                 </DropdownItem>,
               ]
             : undefined
@@ -150,20 +151,21 @@ export default function DetailProvider() {
             <KeycloakTextInput
               id="providerId"
               data-testid="providerId"
+              aria-label={t("providerId")}
               {...register("providerId")}
               readOnly
             />
           </FormGroup>
           <FormGroup
-            label={t("common:name")}
+            label={t("name")}
             fieldId="kc-name"
-            helperTextInvalid={t("common:required")}
+            helperTextInvalid={t("required")}
             validated={
               errors.name ? ValidatedOptions.error : ValidatedOptions.default
             }
             labelIcon={
               <HelpItem
-                helpText={t("clients-help:clientPolicyName")}
+                helpText={t("clientPolicyNameHelp")}
                 fieldLabelId="kc-name"
               />
             }
@@ -183,7 +185,7 @@ export default function DetailProvider() {
           </FormProvider>
           <ActionGroup>
             <Button data-testid="save" type="submit">
-              {t("common:save")}
+              {t("save")}
             </Button>
             <Button
               variant="link"
@@ -194,7 +196,7 @@ export default function DetailProvider() {
                 ></Link>
               )}
             >
-              {t("common:cancel")}
+              {t("cancel")}
             </Button>
           </ActionGroup>
         </FormAccess>

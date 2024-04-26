@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import {
   AlertVariant,
   Button,
@@ -12,54 +9,54 @@ import {
   ToolbarItem,
 } from "@patternfly/react-core";
 import { cellWidth } from "@patternfly/react-table";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
-import { useAdminClient } from "../context/auth/AdminClient";
-import { ViewHeader } from "../components/view-header/ViewHeader";
+import { adminClient } from "../admin-client";
+import type { Row } from "../clients/scopes/ClientScopes";
+import { getProtocolName } from "../clients/utils";
 import { useAlerts } from "../components/alert/Alerts";
+import {
+  AllClientScopeType,
+  AllClientScopes,
+  CellDropdown,
+  ClientScope,
+  ClientScopeDefaultOptionalType,
+  changeScope,
+  removeScope,
+} from "../components/client-scope/ClientScopeTypes";
+import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import {
   Action,
   KeycloakDataTable,
 } from "../components/table-toolbar/KeycloakDataTable";
-import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
+import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
+import helpUrls from "../help-urls";
 import { emptyFormatter } from "../util";
 import useLocaleSort, { mapByKey } from "../utils/useLocaleSort";
-import {
-  CellDropdown,
-  ClientScope,
-  AllClientScopes,
-  ClientScopeDefaultOptionalType,
-  changeScope,
-  removeScope,
-  AllClientScopeType,
-} from "../components/client-scope/ClientScopeTypes";
 import { ChangeTypeDropdown } from "./ChangeTypeDropdown";
-import { toNewClientScope } from "./routes/NewClientScope";
-
-import { toClientScope } from "./routes/ClientScope";
 import {
-  nameFilter,
-  protocolFilter,
   ProtocolType,
   SearchDropdown,
   SearchToolbar,
   SearchType,
+  nameFilter,
+  protocolFilter,
   typeFilter,
 } from "./details/SearchFilter";
-import type { Row } from "../clients/scopes/ClientScopes";
-import { getProtocolName } from "../clients/utils";
-import helpUrls from "../help-urls";
-
-import "./client-scope.css";
+import { toClientScope } from "./routes/ClientScope";
+import { toNewClientScope } from "./routes/NewClientScope";
 
 type TypeSelectorProps = ClientScopeDefaultOptionalType & {
   refresh: () => void;
 };
 
 const TypeSelector = (scope: TypeSelectorProps) => {
-  const { t } = useTranslation("client-scopes");
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
+
   return (
     <CellDropdown
       clientScope={scope}
@@ -67,11 +64,11 @@ const TypeSelector = (scope: TypeSelectorProps) => {
       all
       onSelect={async (value) => {
         try {
-          await changeScope(adminClient, scope, value as AllClientScopeType);
+          await changeScope(scope, value as AllClientScopeType);
           addAlert(t("clientScopeSuccess"), AlertVariant.success);
           scope.refresh();
         } catch (error) {
-          addError("client-scopes:clientScopeError", error);
+          addError("clientScopeError", error);
         }
       }}
     />
@@ -92,9 +89,7 @@ const ClientScopeDetailLink = ({
 
 export default function ClientScopesSection() {
   const { realm } = useRealm();
-  const { t } = useTranslation("client-scopes");
-
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
 
   const [kebabOpen, setKebabOpen] = useState(false);
@@ -104,7 +99,7 @@ export default function ClientScopesSection() {
 
   const [searchType, setSearchType] = useState<SearchType>("name");
   const [searchTypeType, setSearchTypeType] = useState<AllClientScopes>(
-    AllClientScopes.none
+    AllClientScopes.none,
   );
   const [searchProtocol, setSearchProtocol] = useState<ProtocolType>("all");
   const localeSort = useLocaleSort();
@@ -126,22 +121,22 @@ export default function ClientScopesSection() {
       searchType === "name"
         ? nameFilter(search)
         : searchType === "type"
-        ? typeFilter(searchTypeType)
-        : protocolFilter(searchProtocol);
+          ? typeFilter(searchTypeType)
+          : protocolFilter(searchProtocol);
 
     const transformed = clientScopes
       .map((scope) => {
         const row: Row = {
           ...scope,
           type: defaultScopes.find(
-            (defaultScope) => defaultScope.name === scope.name
+            (defaultScope) => defaultScope.name === scope.name,
           )
             ? ClientScope.default
             : optionalScopes.find(
-                (optionalScope) => optionalScope.name === scope.name
-              )
-            ? ClientScope.optional
-            : AllClientScopes.none,
+                  (optionalScope) => optionalScope.name === scope.name,
+                )
+              ? ClientScope.optional
+              : AllClientScopes.none,
         };
         return row;
       })
@@ -149,7 +144,7 @@ export default function ClientScopesSection() {
 
     return localeSort(transformed, mapByKey("name")).slice(
       first,
-      Number(first) + Number(max)
+      Number(first) + Number(max),
     );
   };
 
@@ -158,26 +153,32 @@ export default function ClientScopesSection() {
       count: selectedScopes.length,
       name: selectedScopes[0]?.name,
     }),
-    messageKey: "client-scopes:deleteConfirm",
-    continueButtonLabel: "common:delete",
+    messageKey: "deleteConfirmClientScopes",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
-      try {
-        for (const scope of selectedScopes) {
-          try {
-            await removeScope(adminClient, scope);
-          } catch (error: any) {
-            console.warn(
-              "could not remove scope",
-              error.response?.data?.errorMessage || error
-            );
+      const clientScopes = await adminClient.clientScopes.find();
+      const clientScopeLength = Object.keys(clientScopes).length;
+      if (clientScopeLength - selectedScopes.length > 0) {
+        try {
+          for (const scope of selectedScopes) {
+            try {
+              await removeScope(scope);
+            } catch (error: any) {
+              console.warn(
+                "could not remove scope",
+                error.response?.data?.errorMessage || error,
+              );
+            }
+            await adminClient.clientScopes.del({ id: scope.id! });
           }
-          await adminClient.clientScopes.del({ id: scope.id! });
+          addAlert(t("deletedSuccessClientScope"), AlertVariant.success);
+          refresh();
+        } catch (error) {
+          addError("deleteErrorClientScope", error);
         }
-        addAlert(t("deletedSuccess"), AlertVariant.success);
-        refresh();
-      } catch (error) {
-        addError("client-scopes:deleteError", error);
+      } else {
+        addError(t("notAllowedToDeleteAllClientScopes"), "error");
       }
     },
   });
@@ -187,16 +188,16 @@ export default function ClientScopesSection() {
       <DeleteConfirm />
       <ViewHeader
         titleKey="clientScopes"
-        subKey="client-scopes:clientScopeExplain"
+        subKey="clientScopeExplain"
         helpUrl={helpUrls.clientScopesUrl}
       />
       <PageSection variant="light" className="pf-u-p-0">
         <KeycloakDataTable
           key={key}
           loader={loader}
-          ariaLabelKey="client-scopes:clientScopeList"
+          ariaLabelKey="clientScopeList"
           searchPlaceholderKey={
-            searchType === "name" ? "client-scopes:searchFor" : undefined
+            searchType === "name" ? "searchForClientScope" : undefined
           }
           isSearching={searchType !== "name"}
           searchTypeComponent={
@@ -263,7 +264,7 @@ export default function ClientScopesSection() {
                         setKebabOpen(false);
                       }}
                     >
-                      {t("common:delete")}
+                      {t("delete")}
                     </DropdownItem>,
                   ]}
                 />
@@ -272,7 +273,7 @@ export default function ClientScopesSection() {
           }
           actions={[
             {
-              title: t("common:delete"),
+              title: t("delete"),
               onRowClick: (clientScope) => {
                 setSelectedScopes([clientScope]);
                 toggleDeleteDialog();
@@ -286,21 +287,21 @@ export default function ClientScopesSection() {
             },
             {
               name: "type",
-              displayKey: "client-scopes:assignedType",
+              displayKey: "assignedType",
               cellRenderer: (row) => (
                 <TypeSelector {...row} refresh={refresh} />
               ),
             },
             {
               name: "protocol",
-              displayKey: "client-scopes:protocol",
+              displayKey: "protocol",
               cellRenderer: (client) =>
                 getProtocolName(t, client.protocol ?? "openid-connect"),
               transforms: [cellWidth(15)],
             },
             {
               name: "attributes['gui.order']",
-              displayKey: "client-scopes:displayOrder",
+              displayKey: "displayOrder",
               cellFormatters: [emptyFormatter()],
               transforms: [cellWidth(15)],
             },

@@ -13,7 +13,7 @@ import org.keycloak.representations.idm.IdentityProviderMapperRepresentation;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import java.util.List;
 
 import static org.keycloak.testsuite.broker.KcSamlBrokerConfiguration.ATTRIBUTE_TO_MAP_FRIENDLY_NAME;
@@ -28,6 +28,9 @@ public class KcSamlAdvancedAttributeToGroupMapperTest extends AbstractGroupBroke
             "  {\n" +
             "    \"key\": \"" + ATTRIBUTE_TO_MAP_FRIENDLY_NAME + "\",\n" +
             "    \"value\": \"value 1\"\n" +
+            "  },\n" +"  {\n" +
+            "    \"key\": \"" + ATTRIBUTE_TO_MAP_FRIENDLY_NAME + "\",\n" +
+            "    \"value\": \"value 2\"\n" +
             "  },\n" +
             "  {\n" +
             "    \"key\": \"" + KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2 + "\",\n" +
@@ -65,7 +68,7 @@ public class KcSamlAdvancedAttributeToGroupMapperTest extends AbstractGroupBroke
     public void attributeFriendlyNameGetsConsideredAndMatchedToGroup() {
         createAdvancedGroupMapper(ATTRIBUTES, false,KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2);
         createUserInProviderRealm(ImmutableMap.<String, List<String>> builder()
-                .put(ATTRIBUTE_TO_MAP_FRIENDLY_NAME, ImmutableList.<String> builder().add("value 1").build())
+                .put(ATTRIBUTE_TO_MAP_FRIENDLY_NAME, ImmutableList.<String> builder().add("value 1").add("value 2").build())
                 .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2,
                         ImmutableList.<String> builder().add("value 2").build())
                 .build());

@@ -1,22 +1,23 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useFormContext, Controller } from "react-hook-form";
+import type GroupRepresentation from "@keycloak/keycloak-admin-client/lib/defs/groupRepresentation";
+import { Button, Checkbox, FormGroup } from "@patternfly/react-core";
 import { MinusCircleIcon } from "@patternfly/react-icons";
-import { FormGroup, Button, Checkbox } from "@patternfly/react-core";
 import {
   TableComposable,
-  Thead,
-  Tr,
-  Th,
   Tbody,
   Td,
+  Th,
+  Thead,
+  Tr,
 } from "@patternfly/react-table";
-
-import type GroupRepresentation from "@keycloak/keycloak-admin-client/lib/defs/groupRepresentation";
+import { useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { HelpItem } from "ui-shared";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
+
+import { adminClient } from "../../../admin-client";
 import { GroupPickerDialog } from "../../../components/group/GroupPickerDialog";
 import { KeycloakTextInput } from "../../../components/keycloak-text-input/KeycloakTextInput";
+import { useFetch } from "../../../utils/useFetch";
 
 type GroupForm = {
   groups?: GroupValue[];
@@ -29,7 +30,7 @@ export type GroupValue = {
 };
 
 export const Group = () => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const {
     control,
     register,
@@ -41,16 +42,14 @@ export const Group = () => {
 
   const [open, setOpen] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<GroupRepresentation[]>(
-    []
+    [],
   );
-
-  const { adminClient } = useAdminClient();
 
   useFetch(
     () => {
       if (values && values.length > 0)
         return Promise.all(
-          values.map((g) => adminClient.groups.findOne({ id: g.id }))
+          values.map((g) => adminClient.groups.findOne({ id: g.id })),
         );
       return Promise.resolve([]);
     },
@@ -58,7 +57,7 @@ export const Group = () => {
       const filteredGroup = groups.filter((g) => g) as GroupRepresentation[];
       setSelectedGroups(filteredGroup);
     },
-    []
+    [],
   );
 
   return (
@@ -67,8 +66,8 @@ export const Group = () => {
         label={t("groupsClaim")}
         labelIcon={
           <HelpItem
-            helpText={t("clients-help:groupsClaim")}
-            fieldLabelId="clients:groupsClaim"
+            helpText={t("groupsClaimHelp")}
+            fieldLabelId="groupsClaim"
           />
         }
         fieldId="groups"
@@ -83,10 +82,7 @@ export const Group = () => {
       <FormGroup
         label={t("groups")}
         labelIcon={
-          <HelpItem
-            helpText={t("clients-help:policyGroups")}
-            fieldLabelId="clients:groups"
-          />
+          <HelpItem helpText={t("policyGroupsHelp")} fieldLabelId="groups" />
         }
         fieldId="groups"
         helperTextInvalid={t("requiredGroups")}
@@ -107,8 +103,8 @@ export const Group = () => {
                 <GroupPickerDialog
                   type="selectMany"
                   text={{
-                    title: "clients:addGroupsToGroupPolicy",
-                    ok: "common:add",
+                    title: "addGroupsToGroupPolicy",
+                    ok: "add",
                   }}
                   onConfirm={(groups) => {
                     field.onChange([
@@ -142,7 +138,7 @@ export const Group = () => {
               <Tr>
                 <Th>{t("groups")}</Th>
                 <Th>{t("extendToChildren")}</Th>
-                <Th />
+                <Th aria-hidden="true" />
               </Tr>
             </Thead>
             <Tbody>

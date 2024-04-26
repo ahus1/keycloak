@@ -1,3 +1,5 @@
+import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
+import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
 import {
   FormGroup,
   Select,
@@ -7,28 +9,23 @@ import {
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-
-import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
-import type { ClientQuery } from "@keycloak/keycloak-admin-client/lib/resources/clients";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
-import type { ComponentProps } from "../dynamic/components";
 import { HelpItem } from "ui-shared";
 
-type ClientSelectProps = ComponentProps & {
-  namespace: string;
-  required?: boolean;
-};
+import { adminClient } from "../../admin-client";
+import { useFetch } from "../../utils/useFetch";
+import type { ComponentProps } from "../dynamic/components";
+
+type ClientSelectProps = ComponentProps & {};
 
 export const ClientSelect = ({
   name,
   label,
   helpText,
   defaultValue,
-  namespace,
   isDisabled = false,
   required = false,
 }: ClientSelectProps) => {
-  const { t } = useTranslation(namespace);
+  const { t } = useTranslation();
   const {
     control,
     formState: { errors },
@@ -37,8 +34,6 @@ export const ClientSelect = ({
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<ClientRepresentation[]>([]);
   const [search, setSearch] = useState("");
-
-  const { adminClient } = useAdminClient();
 
   useFetch(
     () => {
@@ -52,12 +47,12 @@ export const ClientSelect = ({
       return adminClient.clients.find(params);
     },
     (clients) => setClients(clients),
-    [search]
+    [search],
   );
 
   const convert = (clients: ClientRepresentation[]) => [
     <SelectOption key="empty" value="">
-      {t("common:none")}
+      {t("none")}
     </SelectOption>,
     ...clients.map((option) => (
       <SelectOption key={option.id} value={option.clientId} />
@@ -68,15 +63,10 @@ export const ClientSelect = ({
     <FormGroup
       label={t(label!)}
       isRequired={required}
-      labelIcon={
-        <HelpItem
-          helpText={t(helpText!)}
-          fieldLabelId={`${namespace}:${label}`}
-        />
-      }
+      labelIcon={<HelpItem helpText={t(helpText!)} fieldLabelId={label!} />}
       fieldId={name!}
       validated={errors[name!] ? "error" : "default"}
-      helperTextInvalid={t("common:required")}
+      helperTextInvalid={t("required")}
     >
       <Controller
         name={name!}

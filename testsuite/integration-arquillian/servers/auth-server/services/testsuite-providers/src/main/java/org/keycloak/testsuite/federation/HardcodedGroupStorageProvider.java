@@ -16,7 +16,6 @@
  */
 package org.keycloak.testsuite.federation;
 
-import org.apache.commons.lang.BooleanUtils;
 import org.jboss.logging.Logger;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.GroupModel;
@@ -54,6 +53,12 @@ public class HardcodedGroupStorageProvider implements GroupStorageProvider {
     }
 
     @Override
+    public GroupModel getGroupByName(RealmModel realm, GroupModel parent, String name) {
+        if (this.groupName.equals(name)) return new HardcodedGroupAdapter(realm);
+        return null;
+    }
+
+    @Override
     public Stream<GroupModel> searchForGroupByNameStream(RealmModel realm, String search, Boolean exact, Integer firstResult, Integer maxResults) {
         if (Boolean.parseBoolean(component.getConfig().getFirst(HardcodedGroupStorageProviderFactory.DELAYED_SEARCH))) try {
             Thread.sleep(5000l);
@@ -61,7 +66,7 @@ public class HardcodedGroupStorageProvider implements GroupStorageProvider {
             Logger.getLogger(HardcodedGroupStorageProvider.class).warn(ex.getCause());
             return Stream.empty();
         }
-        if(BooleanUtils.isTrue(exact)){
+        if(exact != null && exact){
             if (search != null && this.groupName.equals(search)) {
                 return Stream.of(new HardcodedGroupAdapter(realm));
             }

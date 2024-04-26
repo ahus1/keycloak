@@ -17,6 +17,7 @@
 package org.keycloak.testsuite;
 
 import io.appium.java_client.AppiumDriver;
+import jakarta.ws.rs.core.Response;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.jboss.arquillian.container.test.api.RunAsClient;
@@ -36,16 +37,12 @@ import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.common.util.Time;
-import org.keycloak.models.RealmProvider;
-import org.keycloak.models.cache.CacheRealmProvider;
-import org.keycloak.models.cache.UserCache;
 import org.keycloak.models.utils.TimeBasedOTP;
-import org.keycloak.provider.Provider;
+import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RequiredActionProviderRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.services.resources.account.AccountFormService;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.arquillian.AuthServerTestEnricher;
 import org.keycloak.testsuite.arquillian.KcArquillian;
@@ -55,7 +52,6 @@ import org.keycloak.testsuite.auth.page.AuthRealm;
 import org.keycloak.testsuite.auth.page.AuthServer;
 import org.keycloak.testsuite.auth.page.AuthServerContextRoot;
 import org.keycloak.testsuite.auth.page.WelcomePage;
-import org.keycloak.testsuite.auth.page.account.Account;
 import org.keycloak.testsuite.auth.page.login.OIDCLogin;
 import org.keycloak.testsuite.auth.page.login.UpdatePassword;
 import org.keycloak.testsuite.client.KeycloakTestingClient;
@@ -67,8 +63,8 @@ import org.keycloak.testsuite.util.TestCleanup;
 import org.keycloak.testsuite.util.TestEventsLogger;
 import org.openqa.selenium.WebDriver;
 
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.NotFoundException;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PipedInputStream;
@@ -82,7 +78,6 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -95,6 +90,8 @@ import java.util.function.Consumer;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
+import org.keycloak.models.UserModel;
 import static org.keycloak.testsuite.admin.Users.setPasswordFor;
 import static org.keycloak.testsuite.auth.page.AuthRealm.MASTER;
 import static org.keycloak.testsuite.util.ServerURLs.AUTH_SERVER_HOST;
@@ -145,9 +142,6 @@ public abstract class AbstractKeycloakTest {
     protected AuthRealm masterRealmPage;
 
     @Page
-    protected Account accountPage;
-
-    @Page
     protected OIDCLogin loginPage;
 
     @Page
@@ -194,7 +188,6 @@ public abstract class AbstractKeycloakTest {
         }
 
         oauth.init(driver);
-
     }
 
     public void reconnectAdminClient() throws Exception {
@@ -290,9 +283,7 @@ public abstract class AbstractKeycloakTest {
     }
 
     protected void deleteAllCookiesForRealm(String realmName) {
-        // we can't use /auth/realms/{realmName} because some browsers (e.g. Chrome) apparently don't send cookies
-        // to JSON pages and therefore can't delete realms cookies there; a non existing page will do just fine
-        navigateToUri(accountPage.getAuthRoot() + "/realms/" + realmName + "/super-random-page");
+        navigateToUri(oauth.SERVER_ROOT + "/auth/realms/" + realmName + "/testing/blank");
         log.info("deleting cookies in '" + realmName + "' realm");
         driver.manage().deleteAllCookies();
     }
@@ -481,6 +472,10 @@ public abstract class AbstractKeycloakTest {
         assertThat(adminClient.realms().findAll().size(), is(equalTo(1)));
     }
 
+    protected boolean removeVerifyProfileAtImport() {
+        // remove verify profile by default because most tests are not prepared
+        return true;
+    }
 
     public void importRealm(RealmRepresentation realm) {
         if (modifyRealmForSSL()) {
@@ -519,6 +514,19 @@ public abstract class AbstractKeycloakTest {
             // expected when realm does not exist
         }
         adminClient.realms().create(realm);
+
+        if (removeVerifyProfileAtImport()) {
+            try {
+                RequiredActionProviderRepresentation vpModel = adminClient.realm(realm.getRealm()).flows()
+                        .getRequiredAction(UserModel.RequiredAction.VERIFY_PROFILE.name());
+                vpModel.setEnabled(false);
+                vpModel.setDefaultAction(false);
+                adminClient.realm(realm.getRealm()).flows().updateRequiredAction(
+                        UserModel.RequiredAction.VERIFY_PROFILE.name(), vpModel);
+                testingClient.testing().pollAdminEvent(); // remove the event
+            } catch (NotFoundException ignore) {
+            }
+        }
     }
 
     public void removeRealm(String realmName) {
@@ -560,8 +568,9 @@ public abstract class AbstractKeycloakTest {
         return ApiUtil.createUserWithAdminClient(adminClient.realm(realm), homer);
     }
 
-    public static UserRepresentation createUserRepresentation(String username, String email, String firstName, String lastName, List<String> groups, boolean enabled) {
+    public static UserRepresentation createUserRepresentation(String id, String username, String email, String firstName, String lastName, List<String> groups, boolean enabled) {
         UserRepresentation user = new UserRepresentation();
+        user.setId(id);
         user.setUsername(username);
         user.setEmail(email);
         user.setFirstName(firstName);
@@ -569,6 +578,10 @@ public abstract class AbstractKeycloakTest {
         user.setGroups(groups);
         user.setEnabled(enabled);
         return user;
+    }
+
+    public static UserRepresentation createUserRepresentation(String username, String email, String firstName, String lastName, List<String> groups, boolean enabled) {
+        return createUserRepresentation(null, username, email, firstName, lastName, groups, enabled);
     }
 
     public static UserRepresentation createUserRepresentation(String username, String email, String firstName, String lastName, boolean enabled) {
@@ -584,6 +597,23 @@ public abstract class AbstractKeycloakTest {
     public static UserRepresentation createUserRepresentation(String username, String password) {
         UserRepresentation user = createUserRepresentation(username, null, null, null, true, password);
         return user;
+    }
+
+    protected void createAppClientInRealm(String realm) {
+        ClientRepresentation client = new ClientRepresentation();
+        client.setClientId("test-app");
+        client.setName("test-app");
+        client.setSecret("password");
+        client.setEnabled(true);
+        client.setDirectAccessGrantsEnabled(true);
+
+        client.setRedirectUris(Collections.singletonList(oauth.SERVER_ROOT + "/auth/*"));
+        client.setBaseUrl(oauth.SERVER_ROOT + "/auth/realms/" + realm + "/app");
+
+        OIDCAdvancedConfigWrapper.fromClientRepresentation(client).setPostLogoutRedirectUris(Collections.singletonList("+"));
+
+        Response response = adminClient.realm(realm).clients().create(client);
+        response.close();
     }
 
     public void setRequiredActionEnabled(String realm, String requiredAction, boolean enabled, boolean defaultAction) {
@@ -709,17 +739,6 @@ public abstract class AbstractKeycloakTest {
         return log;
     }
 
-    protected String getAccountRedirectUrl(String realm) {
-        return AccountFormService
-              .loginRedirectUrl(UriBuilder.fromUri(oauth.AUTH_SERVER_ROOT))
-              .build(realm)
-              .toString();
-    }
-
-    protected String getAccountRedirectUrl() {
-        return getAccountRedirectUrl("test");
-    }
-
     protected static InputStream httpsAwareConfigurationStream(InputStream input) throws IOException {
         if (!AUTH_SERVER_SSL_REQUIRED) {
             return input;
@@ -737,38 +756,12 @@ public abstract class AbstractKeycloakTest {
         return in;
     }
 
-    /**
-     * MapRealmProvider uses session.invalidate() instead of calling e.g. 
-     * session.clients().removeClients(realm); for clients (where clients are being removed one by one)
-     *
-     * Therefore it doesn't call session.users().preRemove(realm, client) for each client.
-     * Due to that JpaUserFederatedStorageProvider.preRemove(realm, client) is not called.
-     * So there remains objects in the database in user federation related tables after realm removal.
-     *
-     * Same for roles etc. 
-     *
-     * Legacy federated storage is NOT supposed to work with map storage, so this method 
-     * returns true if realm provider is "jpa" to be able to skip particular tests.
-     */
-    protected boolean isJpaRealmProvider() {
-        return keycloakUsingProviderWithId(RealmProvider.class, "jpa");
+    protected void assertResponseSuccessful(Response response) {
+        try {
+            assertEquals(Response.Status.Family.SUCCESSFUL, response.getStatusInfo().getFamily());
+        } catch (AssertionError ex) {
+            throw new AssertionError("unexpected response code " + response.getStatus() + ", body is:\n" + response.readEntity(String.class), ex);
+        }
     }
 
-    protected boolean keycloakUsingProviderWithId(Class<? extends Provider> providerClass, String requiredId) {
-        String providerId = testingClient.server()
-                .fetchString(s -> s.getKeycloakSessionFactory().getProviderFactory(providerClass).getId());
-        return Objects.equals(providerId, "\"" + requiredId + "\"");
-    }
-
-    protected boolean isRealmCacheEnabled() {
-        String realmCache = testingClient.server()
-                .fetchString(s -> s.getKeycloakSessionFactory().getProviderFactory(CacheRealmProvider.class));
-        return Objects.nonNull(realmCache);
-    }
-
-    protected boolean isUserCacheEnabled() {
-        String userCache = testingClient.server()
-                .fetchString(s -> s.getKeycloakSessionFactory().getProviderFactory(UserCache.class));
-        return Objects.nonNull(userCache);
-    }
 }

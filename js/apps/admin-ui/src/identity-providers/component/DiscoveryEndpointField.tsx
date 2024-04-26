@@ -2,10 +2,10 @@ import { FormGroup, Switch } from "@patternfly/react-core";
 import { ReactNode, useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-
 import { HelpItem } from "ui-shared";
+
+import { adminClient } from "../../admin-client";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import environment from "../../environment";
 
 type DiscoveryEndpointFieldProps = {
@@ -19,10 +19,7 @@ export const DiscoveryEndpointField = ({
   fileUpload,
   children,
 }: DiscoveryEndpointFieldProps) => {
-  const { t } = useTranslation("identity-providers");
-
-  const { adminClient } = useAdminClient();
-
+  const { t } = useTranslation();
   const {
     setValue,
     register,
@@ -72,56 +69,60 @@ export const DiscoveryEndpointField = ({
     <>
       <FormGroup
         label={t(
-          id === "oidc" ? "useDiscoveryEndpoint" : "useEntityDescriptor"
+          id === "oidc" ? "useDiscoveryEndpoint" : "useEntityDescriptor",
         )}
         fieldId="kc-discovery-endpoint"
         labelIcon={
           <HelpItem
-            helpText={`identity-providers-help:${
-              id === "oidc" ? "useDiscoveryEndpoint" : "useEntityDescriptor"
-            }`}
-            fieldLabelId="identity-providers:discoveryEndpoint"
+            helpText={t(
+              id === "oidc"
+                ? "useDiscoveryEndpointHelp"
+                : "useEntityDescriptorHelp",
+            )}
+            fieldLabelId="discoveryEndpoint"
           />
         }
       >
         <Switch
           id="kc-discovery-endpoint-switch"
-          label={t("common:on")}
-          labelOff={t("common:off")}
+          label={t("on")}
+          labelOff={t("off")}
           isChecked={discovery}
           onChange={(checked) => {
             clearErrors("discoveryError");
             setDiscovery(checked);
           }}
           aria-label={t(
-            id === "oidc" ? "useDiscoveryEndpoint" : "useEntityDescriptor"
+            id === "oidc" ? "useDiscoveryEndpoint" : "useEntityDescriptor",
           )}
         />
       </FormGroup>
       {discovery && (
         <FormGroup
           label={t(
-            id === "oidc" ? "discoveryEndpoint" : "samlEntityDescriptor"
+            id === "oidc" ? "discoveryEndpoint" : "samlEntityDescriptor",
           )}
           fieldId="kc-discovery-endpoint"
           labelIcon={
             <HelpItem
-              helpText={`identity-providers-help:${
-                id === "oidc" ? "discoveryEndpoint" : "samlEntityDescriptor"
-              }`}
-              fieldLabelId="identity-providers:discoveryEndpoint"
+              helpText={t(
+                id === "oidc"
+                  ? "discoveryEndpointHelp"
+                  : "samlEntityDescriptorHelp",
+              )}
+              fieldLabelId="discoveryEndpoint"
             />
           }
           validated={
             errors.discoveryError || errors.discoveryEndpoint
               ? "error"
               : !discoveryResult
-              ? "default"
-              : "success"
+                ? "default"
+                : "success"
           }
           helperTextInvalid={
             errors.discoveryEndpoint
-              ? t("common:required")
+              ? t("required")
               : t("noValidMetaDataFound", {
                   error: errors.discoveryError?.message,
                 })
@@ -141,8 +142,8 @@ export const DiscoveryEndpointField = ({
               errors.discoveryError || errors.discoveryEndpoint
                 ? "error"
                 : !discoveryResult
-                ? "default"
-                : "success"
+                  ? "default"
+                  : "success"
             }
             customIconUrl={
               discovering

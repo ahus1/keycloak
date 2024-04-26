@@ -158,7 +158,7 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
 
     // Register webauthn-passwordless credential (resident key)
     // Register webauthn credential (non resident key)
-    // Assert 'Try another way' with security key on first step (before any form input)
+    // Assert 'Try another way' with passkey on first step (before any form input)
     // Authenticate UsernamePassword + WebAuthn (non resident key)
     // Authenticate Username + WebAuthnPasswordless (resident key)
     // Authenticate IDLess (resident key)
@@ -248,6 +248,7 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
         events.expectLogout(sessionId)
                 .removeDetail(Details.REDIRECT_URI)
                 .user(userId)
+                .client("account")
                 .assertEvent();
         return credentialId;
     }
@@ -264,7 +265,7 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
         assertThat(selectAuthenticatorPage.getLoginMethodHelpText(SelectAuthenticatorPage.USERNAME),
                 is("Start sign in by entering your username"));
         assertThat(selectAuthenticatorPage.getLoginMethodHelpText(SelectAuthenticatorPage.SECURITY_KEY),
-                is("Use your security key for passwordless sign in."));
+                is("Use your Passkey for passwordless sign in."));
         selectAuthenticatorPage.selectLoginMethod(SelectAuthenticatorPage.USERNAMEPASSWORD);
         loginPage.assertCurrent();
         loginPage.clickTryAnotherWayLink();
@@ -304,6 +305,7 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
         events.expectLogout(sessionId)
                 .removeDetail(Details.REDIRECT_URI)
                 .user(userId)
+                .client("account")
                 .assertEvent();
     }
 
@@ -334,6 +336,7 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
         events.expectLogout(sessionId)
                 .removeDetail(Details.REDIRECT_URI)
                 .user(userId)
+                .client("account")
                 .assertEvent();
     }
 
@@ -367,11 +370,12 @@ public class WebAuthnIdlessTest extends AbstractWebAuthnVirtualTest {
             events.expectLogout(sessionId)
                     .removeDetail(Details.REDIRECT_URI)
                     .user(userId)
+                    .client("account")
                     .assertEvent();
         }
         else {
             loginPage.assertCurrent();
-            assertThat(loginPage.getError(), containsString("Failed to authenticate by the Security key."));
+            assertThat(loginPage.getError(), containsString("Failed to authenticate by the Passkey."));
         }
     }
 

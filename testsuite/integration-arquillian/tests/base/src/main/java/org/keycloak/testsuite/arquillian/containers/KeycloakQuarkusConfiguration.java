@@ -47,6 +47,8 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
 
     private FipsMode fipsMode = FipsMode.valueOfOption(System.getProperty("auth.server.fips.mode"));
 
+    private String defaultFeatures;
+
     @Override
     public void validate() throws ConfigurationException {
         int basePort = getBindHttpPort();
@@ -141,6 +143,11 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
         this.providersPath = providersPath;
     }
 
+    // https://github.com/keycloak/keycloak/issues/20455 Overloading fails time to time with a mismatch error, most probably an Arquillian class reflection bug.
+    public void setProvidersPathString(String providersPath) {
+        this.providersPath = Paths.get(providersPath);
+    }
+
     public int getStartupTimeoutInSeconds() {
         return startupTimeoutInSeconds;
     }
@@ -223,5 +230,13 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
 
     public void setFipsMode(FipsMode fipsMode) {
         this.fipsMode = fipsMode;
+    }
+
+    public void setDefaultFeatures(String defaultFeatures) {
+        this.defaultFeatures = defaultFeatures;
+    }
+
+    public String getDefaultFeatures() {
+        return defaultFeatures;
     }
 }

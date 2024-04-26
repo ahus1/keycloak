@@ -6,19 +6,18 @@ import { HelpItem } from "ui-shared";
 
 const LOGIC_TYPES = ["POSITIVE", "NEGATIVE"] as const;
 
-export const LogicSelector = () => {
-  const { t } = useTranslation("clients");
+type LogicSelectorProps = {
+  isDisabled: boolean;
+};
+
+export const LogicSelector = ({ isDisabled }: LogicSelectorProps) => {
+  const { t } = useTranslation();
   const { control } = useFormContext();
 
   return (
     <FormGroup
       label={t("logic")}
-      labelIcon={
-        <HelpItem
-          helpText={t("clients-help:logic")}
-          fieldLabelId="clients:logic"
-        />
-      }
+      labelIcon={<HelpItem helpText={t("logicHelp")} fieldLabelId="logic" />}
       fieldId="logic"
       hasNoPaddingTop
     >
@@ -39,6 +38,7 @@ export const LogicSelector = () => {
                 onChange={() => field.onChange(type)}
                 label={t(`logicType.${type.toLowerCase()}`)}
                 className="pf-u-mb-md"
+                isDisabled={isDisabled}
               />
             ))}
           </>

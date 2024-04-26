@@ -244,6 +244,18 @@ public class RealmAdapter implements CachedRealmModel {
     }
 
     @Override
+    public int getMaxTemporaryLockouts() {
+        if(isUpdated()) return updated.getMaxTemporaryLockouts();
+        return cached.getMaxTemporaryLockouts();
+    }
+
+    @Override
+    public void setMaxTemporaryLockouts(final int val) {
+        getDelegateForUpdate();
+        updated.setMaxTemporaryLockouts(val);
+    }
+
+    @Override
     public int getMaxFailureWaitSeconds() {
         if (isUpdated()) return updated.getMaxFailureWaitSeconds();
         return cached.getMaxFailureWaitSeconds();
@@ -748,32 +760,6 @@ public class RealmAdapter implements CachedRealmModel {
     }
 
     @Override
-    @Deprecated
-    public Stream<String> getDefaultRolesStream() {
-        if (isUpdated()) return updated.getDefaultRolesStream();
-        return getDefaultRole().getCompositesStream().filter(this::isRealmRole).map(RoleModel::getName);
-    }
-
-    private boolean isRealmRole(RoleModel role) {
-        return ! role.isClientRole();
-    }
-
-    @Override
-    @Deprecated
-    public void addDefaultRole(String name) {
-        getDelegateForUpdate();
-        updated.addDefaultRole(name);
-    }
-
-    @Override
-    @Deprecated
-    public void removeDefaultRoles(String... defaultRoles) {
-        getDelegateForUpdate();
-        updated.removeDefaultRoles(defaultRoles);
-
-    }
-
-    @Override
     public void addToDefaultRoles(RoleModel role) {
         getDelegateForUpdate();
         updated.addToDefaultRoles(role);
@@ -823,6 +809,11 @@ public class RealmAdapter implements CachedRealmModel {
     @Override
     public Stream<ClientModel> searchClientByAttributes(Map<String, String> attributes, Integer firstResult, Integer maxResults) {
         return cacheSession.searchClientsByAttributes(this, attributes, firstResult, maxResults);
+    }
+
+    @Override
+    public Stream<ClientModel> searchClientByAuthenticationFlowBindingOverrides(Map<String, String> overrides, Integer firstResult, Integer maxResults) {
+        return cacheSession.searchClientsByAuthenticationFlowBindingOverrides(this, overrides, firstResult, maxResults);
     }
 
     @Override
@@ -1276,6 +1267,18 @@ public class RealmAdapter implements CachedRealmModel {
     }
 
     @Override
+    public AuthenticationFlowModel getFirstBrokerLoginFlow() {
+        if (isUpdated()) return updated.getFirstBrokerLoginFlow();
+        return cached.getFirstBrokerLoginFlow();
+    }
+
+    @Override
+    public void setFirstBrokerLoginFlow(AuthenticationFlowModel flow) {
+        getDelegateForUpdate();
+        updated.setFirstBrokerLoginFlow(flow);
+    }
+
+    @Override
     public Stream<AuthenticationFlowModel> getAuthenticationFlowsStream() {
         if (isUpdated()) return updated.getAuthenticationFlowsStream();
         return cached.getAuthenticationFlowList().stream();
@@ -1473,12 +1476,6 @@ public class RealmAdapter implements CachedRealmModel {
     }
 
     @Override
-    @Deprecated
-    public Stream<GroupModel> searchForGroupByNameStream(String search, Integer first, Integer max) {
-        return cacheSession.searchForGroupByNameStream( this, search, false, first, max);
-    }
-
-    @Override
     public boolean removeGroup(GroupModel group) {
         return cacheSession.removeGroup(this, group);
     }
@@ -1486,13 +1483,7 @@ public class RealmAdapter implements CachedRealmModel {
     @Override
     public Stream<ClientScopeModel> getClientScopesStream() {
         if (isUpdated()) return updated.getClientScopesStream();
-        return cached.getClientScopes().stream().map(scope -> {
-            ClientScopeModel model = cacheSession.getClientScopeById(this, scope);
-            if (model == null) {
-                throw new IllegalStateException("Cached clientScope not found: " + scope);
-            }
-            return model;
-        });
+        return cacheSession.getClientScopesStream(this);
     }
 
     @Override

@@ -1,10 +1,11 @@
 import type ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
-import { ActionGroup, Button, Form } from "@patternfly/react-core";
+import { Button, Form } from "@patternfly/react-core";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { ScrollForm } from "ui-shared";
 
-import { ScrollForm } from "../components/scroll-form/ScrollForm";
+import { FixedButtonsGroup } from "../components/form/FixedButtonGroup";
 import { useRealm } from "../context/realm-context/RealmContext";
 import useIsFeatureEnabled, { Feature } from "../utils/useIsFeatureEnabled";
 import { LdapSettingsAdvanced } from "./ldap/LdapSettingsAdvanced";
@@ -32,7 +33,7 @@ export const UserFederationLdapForm = ({
   id,
   onSubmit,
 }: UserFederationLdapFormProps) => {
-  const { t } = useTranslation("user-federation");
+  const { t } = useTranslation();
   const form = useFormContext<LdapComponentRepresentation>();
   const navigate = useNavigate();
   const { realm } = useRealm();
@@ -41,6 +42,7 @@ export const UserFederationLdapForm = ({
   return (
     <>
       <ScrollForm
+        label={t("jumpToSection")}
         sections={[
           {
             title: t("generalOptions"),
@@ -71,30 +73,26 @@ export const UserFederationLdapForm = ({
         ]}
       />
       <Form onSubmit={form.handleSubmit(onSubmit)}>
-        <ActionGroup className="keycloak__form_actions">
-          <Button
-            isDisabled={!form.formState.isDirty}
-            variant="primary"
-            type="submit"
-            data-testid="ldap-save"
-          >
-            {t("common:save")}
-          </Button>
+        <FixedButtonsGroup
+          name="ldap"
+          isActive={form.formState.isDirty}
+          isSubmit
+        >
           <Button
             variant="link"
             onClick={() => navigate(toUserFederation({ realm }))}
             data-testid="ldap-cancel"
           >
-            {t("common:cancel")}
+            {t("cancel")}
           </Button>
-        </ActionGroup>
+        </FixedButtonsGroup>
       </Form>
     </>
   );
 };
 
 export function serializeFormData(
-  formData: LdapComponentRepresentation
+  formData: LdapComponentRepresentation,
 ): LdapComponentRepresentation {
   const { config } = formData;
 

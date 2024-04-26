@@ -1,3 +1,4 @@
+import type IdentityProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/identityProviderRepresentation";
 import {
   ActionGroup,
   AlertVariant,
@@ -8,11 +9,10 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 
-import type IdentityProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/identityProviderRepresentation";
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
-import { FormAccess } from "../../components/form-access/FormAccess";
+import { FormAccess } from "../../components/form/FormAccess";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
-import { useAdminClient } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { toIdentityProvider } from "../routes/IdentityProvider";
 import { toIdentityProviders } from "../routes/IdentityProviders";
@@ -24,7 +24,7 @@ type DiscoveryIdentityProvider = IdentityProviderRepresentation & {
 };
 
 export default function AddSamlConnect() {
-  const { t } = useTranslation("identity-providers");
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const id = "saml";
 
@@ -36,8 +36,7 @@ export default function AddSamlConnect() {
     formState: { isDirty },
   } = form;
 
-  const { adminClient } = useAdminClient();
-  const { addAlert } = useAlerts();
+  const { addAlert, addError } = useAlerts();
   const { realm } = useRealm();
 
   const onSubmit = async (provider: DiscoveryIdentityProvider) => {
@@ -47,22 +46,17 @@ export default function AddSamlConnect() {
         ...provider,
         providerId: id,
       });
-      addAlert(t("createSuccess"), AlertVariant.success);
+      addAlert(t("createIdentityProviderSuccess"), AlertVariant.success);
       navigate(
         toIdentityProvider({
           realm,
           providerId: id,
           alias: provider.alias!,
           tab: "settings",
-        })
+        }),
       );
     } catch (error: any) {
-      addAlert(
-        t("createError", {
-          error: error.response?.data?.errorMessage || error,
-        }),
-        AlertVariant.danger
-      );
+      addError("createIdentityProviderError", error);
     }
   };
 
@@ -76,7 +70,7 @@ export default function AddSamlConnect() {
             isHorizontal
             onSubmit={handleSubmit(onSubmit)}
           >
-            <SamlGeneralSettings id={id} />
+            <SamlGeneralSettings />
             <SamlConnectSettings />
             <ActionGroup>
               <Button
@@ -85,7 +79,7 @@ export default function AddSamlConnect() {
                 type="submit"
                 data-testid="createProvider"
               >
-                {t("common:add")}
+                {t("add")}
               </Button>
               <Button
                 variant="link"
@@ -94,7 +88,7 @@ export default function AddSamlConnect() {
                   <Link {...props} to={toIdentityProviders({ realm })} />
                 )}
               >
-                {t("common:cancel")}
+                {t("cancel")}
               </Button>
             </ActionGroup>
           </FormAccess>

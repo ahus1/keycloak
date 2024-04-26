@@ -32,7 +32,9 @@ import org.keycloak.authentication.authenticators.browser.OTPFormAuthenticatorFa
 import org.keycloak.authentication.authenticators.conditional.ConditionalUserConfiguredAuthenticatorFactory;
 import org.keycloak.broker.provider.util.SimpleHttp;
 import org.keycloak.common.constants.KerberosConstants;
+import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.component.PrioritizedComponentModel;
+import org.keycloak.crypto.Algorithm;
 import org.keycloak.keys.KeyProvider;
 import org.keycloak.models.AccountRoles;
 import org.keycloak.models.AdminRoles;
@@ -54,6 +56,7 @@ import org.keycloak.representations.idm.AuthenticationFlowRepresentation;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.ComponentRepresentation;
+import org.keycloak.representations.idm.KeysMetadataRepresentation;
 import org.keycloak.representations.idm.MappingsRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
@@ -63,6 +66,8 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.representations.idm.authorization.DecisionStrategy;
 import org.keycloak.representations.idm.authorization.ResourceRepresentation;
 import org.keycloak.representations.idm.authorization.ResourceServerRepresentation;
+import org.keycloak.representations.userprofile.config.UPConfig;
+import org.keycloak.representations.userprofile.config.UPConfig.UnmanagedAttributePolicy;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.testsuite.AbstractKeycloakTest;
 import org.keycloak.testsuite.Assert;
@@ -70,15 +75,18 @@ import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.exportimport.ExportImportUtil;
 import org.keycloak.testsuite.runonserver.RunHelpers;
 import org.keycloak.testsuite.util.OAuthClient;
+import org.keycloak.theme.DefaultThemeSelectorProvider;
 import org.keycloak.util.TokenUtil;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -88,23 +96,28 @@ import java.util.stream.Collectors;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.keycloak.migration.migrators.MigrateTo24_0_0.REALM_USER_PROFILE_ENABLED;
 import static org.keycloak.models.AccountRoles.MANAGE_ACCOUNT;
 import static org.keycloak.models.AccountRoles.MANAGE_ACCOUNT_LINKS;
 import static org.keycloak.models.AccountRoles.VIEW_GROUPS;
 import static org.keycloak.models.Constants.ACCOUNT_MANAGEMENT_CLIENT_ID;
 import static org.keycloak.testsuite.Assert.assertNames;
 import static org.keycloak.testsuite.auth.page.AuthRealm.MASTER;
+import static org.keycloak.userprofile.DeclarativeUserProfileProvider.UP_COMPONENT_CONFIG_KEY;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -153,6 +166,48 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         assertNames(masterRealm.clients().get(id).roles().list(), "master-test-client-role");
         assertNames(masterRealm.users().search("", 0, 5), "admin", "master-test-user");
         assertNames(masterRealm.groups().groups(), "master-test-group");
+    }
+
+    protected void testRhssoThemes(RealmResource realm) {
+        // check themes are removed
+        RealmRepresentation rep = realm.toRepresentation();
+        Assert.assertNull("Login theme was not modified", rep.getLoginTheme());
+        Assert.assertNull("Email theme was not modified", rep.getEmailTheme());
+        // there should be either new default or left null if not set
+        assertThat("Account theme was not modified", rep.getAccountTheme(), anyOf(equalTo("keycloak.v2"), nullValue()));
+        // check the client theme is also removed
+        List<ClientRepresentation> client = realm.clients().findByClientId("migration-saml-client");
+        Assert.assertNotNull("migration-saml-client client is missing", client);
+        Assert.assertEquals("migration-saml-client client is missing", 1, client.size());
+        Assert.assertNull("migration-saml-client login theme was not removed", client.get(0).getAttributes().get(DefaultThemeSelectorProvider.LOGIN_THEME_KEY));
+    }
+
+    protected void testHttpChallengeFlow(RealmResource realm) {
+        log.info("testing 'http challenge' flow not present");
+        Assert.assertFalse(realm.flows().getFlows()
+                .stream()
+                .anyMatch(authFlow -> authFlow.getAlias().equalsIgnoreCase("http challenge")));
+    }
+
+    protected void testUserProfile(RealmResource realm) {
+        // check user profile config
+        List<ComponentRepresentation> userProfileComponents = realm.components().query(null, "org.keycloak.userprofile.UserProfileProvider");
+        assertThat(userProfileComponents, hasSize(1));
+
+        ComponentRepresentation component = userProfileComponents.get(0);
+        assertThat(component.getProviderId(), equalTo("declarative-user-profile"));
+        assertThat(component.getConfig().size(), equalTo(1));
+        assertThat(component.getConfig().getList(UP_COMPONENT_CONFIG_KEY), not(empty()));
+    }
+
+    protected void testRegistrationProfileFormActionRemoved(RealmResource realm) {
+        AuthenticationFlowRepresentation registrationFlow = realm.flows().getFlows().stream()
+                .filter(flowRep -> DefaultAuthenticationFlows.REGISTRATION_FLOW.equals(flowRep.getAlias()))
+                .findFirst().orElseThrow(() -> new NoSuchElementException("No registration flow in realm " + realm.toRepresentation().getRealm()));
+
+        Assert.assertFalse(realm.flows().getExecutions(registrationFlow.getAlias())
+                .stream()
+                .anyMatch(execution -> "registration-profile-action".equals(execution.getProviderId())));
     }
 
     /**
@@ -328,12 +383,39 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         testViewGroups(migrationRealm);
     }
 
-   protected void testMigrationTo21_0_2() {
-       testTermsAndConditionsMigrated(masterRealm);
-       testTermsAndConditionsMigrated(migrationRealm);
-       testTermsAndConditionsMigrated(migrationRealm2);
-   }
+    protected void testMigrationTo21_0_2() {
+        testTermsAndConditionsMigrated(masterRealm);
+        testTermsAndConditionsMigrated(migrationRealm);
+        testTermsAndConditionsMigrated(migrationRealm2);
+    }
 
+    protected void testMigrationTo22_0_0() {
+        testRhssoThemes(migrationRealm);
+        testHttpChallengeFlow(migrationRealm);
+    }
+
+    /**
+     * @param testUserProfileMigration whether a migrated realm contains a user profile component or not.
+     */
+    protected void testMigrationTo23_0_0(boolean testUserProfileMigration) {
+        if (testUserProfileMigration) testUserProfile(migrationRealm2);
+        testRegistrationProfileFormActionRemoved(migrationRealm2);
+    }
+
+    protected void testMigrationTo24_0_0(boolean testUserProfileMigration, boolean testLdapUseTruststoreSpiMigration) {
+        if (testUserProfileMigration) {
+            testUserProfileEnabledByDefault(migrationRealm);
+            testUnmanagedAttributePolicySet(migrationRealm, UnmanagedAttributePolicy.ENABLED);
+            testUserProfileEnabledByDefault(migrationRealm2);
+            testUnmanagedAttributePolicySet(migrationRealm2, null);
+            testHS512KeyCreated(migrationRealm);
+            testHS512KeyCreated(migrationRealm2);
+            testClientAttributes(migrationRealm);
+        }
+        if (testLdapUseTruststoreSpiMigration) {
+            testLdapUseTruststoreSpiMigration(migrationRealm2);
+        }
+    }
 
     protected void testDeleteAccount(RealmResource realm) {
         ClientRepresentation accountClient = realm.clients().findByClientId(ACCOUNT_MANAGEMENT_CLIENT_ID).get(0);
@@ -594,7 +676,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         ComponentRepresentation component = testingClient.server(MIGRATION).fetch(RunHelpers.internalComponent(components.get(0).getId()));
         assertEquals(expectedMigrationRealmKey, component.getConfig().getFirst("privateKey"));
 
-        components = migrationRealm.components().query(realmId, KeyProvider.class.getName(), "hmac-generated");
+        components = migrationRealm.components().query(realmId, KeyProvider.class.getName(), "hmac-generated-hs512");
         assertEquals(1, components.size());
     }
 
@@ -1011,6 +1093,22 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         testMigrationTo21_0_2();
     }
 
+    protected void testMigrationTo22_x() {
+        testMigrationTo22_0_0();
+    }
+
+    protected void testMigrationTo23_x(boolean testUserProfileMigration) {
+        testMigrationTo23_0_0(testUserProfileMigration);
+    }
+
+    protected void testMigrationTo24_x(boolean testUserProfileMigration) {
+        testMigrationTo24_0_0(testUserProfileMigration, false);
+    }
+
+    protected void testMigrationTo24_x(boolean testUserProfileMigration, boolean testLdapUseTruststoreSpiMigration) {
+        testMigrationTo24_0_0(testUserProfileMigration, testLdapUseTruststoreSpiMigration);
+    }
+
     protected void testMigrationTo7_x(boolean supportedAuthzServices) {
         if (supportedAuthzServices) {
             testDecisionStrategySetOnResourceServer();
@@ -1021,7 +1119,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
             URI url = suiteContext.getAuthServerInfo().getUriBuilder().path("/auth").build();
             String response = SimpleHttp.doGet(url.toString(), client).asString();
-            Matcher m = Pattern.compile("resources/([^/]*)/welcome").matcher(response);
+            Matcher m = Pattern.compile("resources/([^/]*)/common").matcher(response);
             assertTrue(m.find());
             assertTrue(m.group(1).matches("[a-zA-Z0-9_\\-.~]{5}"));
         } catch (IOException e) {
@@ -1114,5 +1212,64 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         log.info("testing realm attributes migration");
         Map<String, String> realmAttributes = migrationRealm.toRepresentation().getAttributes();
         assertEquals("custom_value", realmAttributes.get("custom_attribute"));
+    }
+
+    private void testUserProfileEnabledByDefault(RealmResource realm) {
+        RealmRepresentation rep = realm.toRepresentation();
+        Map<String, String> attributes = rep.getAttributes();
+        String userProfileEnabled = attributes.get(REALM_USER_PROFILE_ENABLED);
+        assertNull(userProfileEnabled);
+    }
+
+    private void testUnmanagedAttributePolicySet(RealmResource realm, UnmanagedAttributePolicy policy) {
+        UPConfig upConfig = realm.users().userProfile().getConfiguration();
+        assertEquals(policy, upConfig.getUnmanagedAttributePolicy());
+    }
+
+    /**
+     * Checks if the {@code useTruststoreSpi} flag in the LDAP federation provider present in realm {@code Migration2}
+     * was properly migrated from the old value {@code ldapsOnly} to {@code always}.
+     * </p>
+     * This provider was added to the file migration-realm-19.0.3.json as a disabled provider, so it doesn't get involved
+     * in actual user searches and is there just to test the migration of the {@code useTruststoreSpi} config attribute.
+     *
+     * @param realm the migrated realm resource.
+     */
+    private void testLdapUseTruststoreSpiMigration(final RealmResource realm) {
+        RealmRepresentation rep = realm.toRepresentation();
+        List<ComponentRepresentation> componentsRep = realm.components().query(rep.getId(), UserStorageProvider.class.getName());
+        assertThat(componentsRep.size(), equalTo(1));
+        MultivaluedHashMap<String, String> config = componentsRep.get(0).getConfig();
+        assertNotNull(config);
+        assertThat(config.getFirst(LDAPConstants.USE_TRUSTSTORE_SPI), equalTo(LDAPConstants.USE_TRUSTSTORE_ALWAYS));
+    }
+
+    private void testHS512KeyCreated(RealmResource realm) {
+        List<ComponentRepresentation> keyProviders = realm.components().query(realm.toRepresentation().getId(), KeyProvider.class.getName());
+        Assert.assertTrue("Old HS256 key provider does not exists",
+                keyProviders.stream().anyMatch(c -> "hmac-generated".equals(c.getProviderId())
+                        && c.getConfig().getFirst("algorithm").equals(Algorithm.HS256)));
+        Assert.assertTrue("New HS512 key provider does not exists",
+                keyProviders.stream().anyMatch(c -> "hmac-generated".equals(c.getProviderId())
+                        && c.getConfig().getFirst("algorithm").equals(Algorithm.HS512)));
+        KeysMetadataRepresentation keysMetadata = realm.keys().getKeyMetadata();
+        Assert.assertNotNull("Old HS256 key does not exist", keysMetadata.getActive().get(Algorithm.HS256));
+        Assert.assertNotNull("New HS256 key does not exist", keysMetadata.getActive().get(Algorithm.HS512));
+    }
+
+    private void testClientAttributes(RealmResource realm) {
+        List<ClientRepresentation> clients = realm.clients().findByClientId("migration-saml-client");
+        Assert.assertEquals(1, clients.size());
+        ClientRepresentation client = clients.get(0);
+        Assert.assertNotNull(client.getAttributes().get("saml.artifact.binding.identifier"));
+        Assert.assertNotNull(client.getAttributes().get("saml_idp_initiated_sso_url_name"));
+        List<String> clientIds = realm.clients().query("saml.artifact.binding.identifier:\"" + client.getAttributes().get("saml.artifact.binding.identifier") + "\"")
+                .stream().map(ClientRepresentation::getClientId)
+                .collect(Collectors.toList());
+        Assert.assertEquals(Collections.singletonList(client.getClientId()), clientIds);
+        clientIds = realm.clients().query("saml_idp_initiated_sso_url_name:\"" + client.getAttributes().get("saml_idp_initiated_sso_url_name") + "\"")
+                .stream().map(ClientRepresentation::getClientId)
+                .collect(Collectors.toList());
+        Assert.assertEquals(Collections.singletonList(client.getClientId()), clientIds);
     }
 }

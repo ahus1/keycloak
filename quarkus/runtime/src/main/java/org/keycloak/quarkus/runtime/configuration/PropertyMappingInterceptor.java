@@ -16,38 +16,96 @@
  */
 package org.keycloak.quarkus.runtime.configuration;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import javax.annotation.Priority;
-
 import io.smallrye.config.ConfigSourceInterceptor;
 import io.smallrye.config.ConfigSourceInterceptorContext;
 import io.smallrye.config.ConfigValue;
-import io.smallrye.config.Priorities;
 
+import org.apache.commons.collections4.iterators.FilterIterator;
+import org.keycloak.common.util.StringPropertyReplacer;
+import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMappers;
 
+import java.util.Iterator;
+import java.util.function.Function;
+
+import static org.keycloak.quarkus.runtime.Environment.isRebuild;
+
 /**
  * <p>This interceptor is responsible for mapping Keycloak properties to their corresponding properties in Quarkus.
- * 
+ *
  * <p>A single property in Keycloak may span a single or multiple properties on Quarkus and for each property we want to map
  * from Quarkus we should configure a {@link PropertyMapper}.
- * 
+ *
  * <p>The {@link PropertyMapper} can either perform a 1:1 mapping where the value of a property from
  * Keycloak (e.g.: https.port) is mapped to a single properties in Quarkus, or perform a 1:N mapping where the value of a property
  * from Keycloak (e.g.: database) is mapped to multiple properties in Quarkus.
  *
- * <p>This interceptor should execute between the {@link io.smallrye.config.ExpressionConfigSourceInterceptor} and the {@link io.smallrye.config.ProfileConfigSourceInterceptor}
- * so that expressions are properly resolved after executing this interceptor while still able to resolve properties based on the current
- * profile.
+ * <p>This interceptor must execute after the {@link io.smallrye.config.ExpressionConfigSourceInterceptor} so that expressions
+ * are properly resolved before executing this interceptor. Hence, leaving the default priority.
  */
-@Priority(Priorities.LIBRARY + 201)
 public class PropertyMappingInterceptor implements ConfigSourceInterceptor {
+
+    private static ThreadLocal<Boolean> disable = new ThreadLocal<>();
+
+    public static void disable() {
+        disable.set(true);
+    }
+
+    public static void enable() {
+        disable.remove();
+    }
+    
+    <T> Iterator<T> filterRuntime(Iterator<T> iter, Function<T, String> nameFunc) {
+        if (!isRebuild() && !Environment.isRebuildCheck()) {
+            return iter;
+        }
+        return new FilterIterator<>(iter, item -> !isRuntime(nameFunc.apply(item)));
+    }
+    
+    static boolean isRuntime(String name) {
+        PropertyMapper<?> mapper = PropertyMappers.getMapper(name);
+        return mapper != null && mapper.isRunTime();
+    }
+
+    @Override
+    public Iterator<String> iterateNames(ConfigSourceInterceptorContext context) {
+        return filterRuntime(context.iterateNames(), Function.identity());
+    }
+
+    @Override
+    public Iterator<ConfigValue> iterateValues(ConfigSourceInterceptorContext context) {
+        return filterRuntime(context.iterateValues(), ConfigValue::getName);
+    }
 
     @Override
     public ConfigValue getValue(ConfigSourceInterceptorContext context, String name) {
-        return PropertyMappers.getValue(context, name);
+        if (Boolean.TRUE.equals(disable.get())) {
+            return context.proceed(name);
+        }
+        ConfigValue value = PropertyMappers.getValue(context, name);
+
+        if (value == null || value.getValue() == null) {
+            return null;
+        }
+
+        if (!value.getValue().contains("${")) {
+            return value;
+        }
+
+        // Our mappers might have returned a value containing an expression ${...}.
+        // However, ExpressionConfigSourceInterceptor was already executed before (to expand e.g. env vars in config file).
+        // Hence, we need to manually resolve these expressions here. Not ideal, but there's no other way (at least I haven't found one).
+        return value.withValue(
+                StringPropertyReplacer.replaceProperties(value.getValue(),
+                        property -> {
+                            ConfigValue prop = context.proceed(property);
+
+                            if (prop == null) {
+                                return null;
+                            }
+
+                            return prop.getValue();
+                        }));
     }
 }

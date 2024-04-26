@@ -27,14 +27,22 @@ import org.keycloak.federation.sssd.impl.PAMAuthenticator;
 import org.keycloak.models.*;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.storage.ReadOnlyException;
 import org.keycloak.storage.UserStoragePrivateUtil;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.UserStorageProviderModel;
 import org.keycloak.storage.user.ImportedUserValidation;
 import org.keycloak.storage.user.UserLookupProvider;
+import org.keycloak.userprofile.AttributeContext;
+import org.keycloak.userprofile.AttributeMetadata;
+import org.keycloak.userprofile.UserProfileDecorator;
+import org.keycloak.userprofile.UserProfileMetadata;
 
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -48,7 +56,8 @@ public class SSSDFederationProvider implements UserStorageProvider,
         UserLookupProvider,
         CredentialInputUpdater,
         CredentialInputValidator,
-        ImportedUserValidation {
+        ImportedUserValidation,
+        UserProfileDecorator {
 
     private static final Logger logger = Logger.getLogger(SSSDFederationProvider.class);
 
@@ -111,8 +120,12 @@ public class SSSDFederationProvider implements UserStorageProvider,
     }
 
     protected UserModel importUserToKeycloak(RealmModel realm, String username) {
-        Sssd sssd = new Sssd(username);
+        Sssd sssd = new Sssd(username, factory.getDbusConnection());
         User sssdUser = sssd.getUser();
+        if (sssdUser == null) {
+            return null;
+        }
+
         logger.debugf("Creating SSSD user: %s to local Keycloak storage", username);
         UserModel user = UserStoragePrivateUtil.userLocalStorage(session).addUser(realm, username);
         user.setEnabled(true);
@@ -120,7 +133,7 @@ public class SSSDFederationProvider implements UserStorageProvider,
         user.setFirstName(sssdUser.getFirstName());
         user.setLastName(sssdUser.getLastName());
         for (String s : sssd.getGroups()) {
-            GroupModel group = KeycloakModelUtils.findGroupByPath(realm, "/" + s);
+            GroupModel group = KeycloakModelUtils.findGroupByPath(session, realm, "/" + s);
             if (group == null) {
                 group = session.groups().createGroup(realm, s);
             }
@@ -158,8 +171,8 @@ public class SSSDFederationProvider implements UserStorageProvider,
     }
 
     public boolean isValid(RealmModel realm, UserModel local) {
-        User user = new Sssd(local.getUsername()).getUser();
-        return user.equals(local);
+        User user = new Sssd(local.getUsername(), factory.getDbusConnection()).getUser();
+        return user != null && user.equals(local);
     }
 
     @Override
@@ -191,12 +204,11 @@ public class SSSDFederationProvider implements UserStorageProvider,
 
     @Override
     public void close() {
-        Sssd.disconnect();
     }
 
     @Override
     public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
-        throw new IllegalStateException("You can't update your password as your account is read only.");
+        throw new ReadOnlyException("You can't update your password as your account is read only.");
     }
 
     @Override
@@ -206,5 +218,41 @@ public class SSSDFederationProvider implements UserStorageProvider,
     @Override
     public Stream<String> getDisableableCredentialTypesStream(RealmModel realm, UserModel user) {
         return Stream.empty();
+    }
+
+    @Override
+    public void decorateUserProfile(RealmModel realm, UserProfileMetadata metadata) {
+        // selector by sssd
+        Predicate<AttributeContext> sssdUsersSelector = attributeContext ->
+                attributeContext.getUser() != null && model.getId().equals(attributeContext.getUser().getFederationLink());
+
+        // condition to view only by admin
+        Predicate<AttributeContext> onlyAdminCondition = context -> metadata.getContext().isAdminContext();
+
+        // guiOrder if new attributes are needed
+        int guiOrder = (int) metadata.getAttributes().stream()
+                .map(AttributeMetadata::getName)
+                .distinct()
+                .count();
+
+        // firstName, lastName, username and email should be read-only
+        for (String attrName : List.of(UserModel.FIRST_NAME, UserModel.LAST_NAME, UserModel.EMAIL, UserModel.USERNAME)) {
+            List<AttributeMetadata> attrMetadatas = metadata.getAttribute(attrName);
+            if (attrMetadatas.isEmpty()) {
+                logger.debugf("Adding user profile attribute '%s' for sssd provider and context '%s'.", attrName, metadata.getContext());
+                AttributeMetadata sssdAttrMetadata = metadata.addAttribute(attrName, guiOrder++, Collections.emptyList())
+                        .addWriteCondition(AttributeMetadata.ALWAYS_FALSE)
+                        .addReadCondition(onlyAdminCondition)
+                        .setRequired(AttributeMetadata.ALWAYS_FALSE);
+                sssdAttrMetadata.setSelector(sssdUsersSelector);
+            } else {
+                for (AttributeMetadata attrMetadata : attrMetadatas) {
+                    logger.debugf("Cloning attribute '%s' as read-only for sssd provider and context '%s'.", attrName, metadata.getContext());
+                    AttributeMetadata sssdAttrMetadata = metadata.addAttribute(attrMetadata.clone())
+                            .addWriteCondition(AttributeMetadata.ALWAYS_FALSE);
+                    sssdAttrMetadata.setSelector(sssdUsersSelector);
+                }
+            }
+        }
     }
 }

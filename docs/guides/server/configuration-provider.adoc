@@ -1,6 +1,7 @@
 <#import "/templates/guide.adoc" as tmpl>
 <#import "/templates/kc.adoc" as kc>
 <#import "/templates/options.adoc" as opts>
+<#import "/templates/links.adoc" as links>
 
 <@tmpl.guide
 title="Configuring providers"
@@ -10,16 +11,17 @@ The server is built with extensibility in mind and for that it provides a number
 responsible for providing a specific capability to the server. In this {section}, you are going to understand the core concepts around
 the configuration of SPIs and their respective providers.
 
-After reading this guide, you should be able to use the concepts and the steps herein explained to install, uninstall, enable, disable, and configure
+After reading this {section}, you should be able to use the concepts and the steps herein explained to install, uninstall, enable, disable, and configure
 any provider, including those you have implemented to extend the server capabilities in order to better fulfill your requirements.
 
 == Configuration option format
 
 Providers can be configured by using a specific configuration format. The format consists of:
 
-```
+[source]
+----
 spi-<spi-id>-<provider-id>-<property>=<value>
-```
+----
 
 The `<spi-id>` is the name of the SPI you want to configure.
 
@@ -31,13 +33,14 @@ All those names (for spi, provider, and property) should be in lower case and if
 
 Taking the `HttpClientSpi` SPI as an example, the name of the SPI is `connectionsHttpClient` and one of the provider implementations available is named `default`. In order to set the `connectionPoolSize` property you would use a configuration option as follows:
 
-```
+[source]
+----
 spi-connections-http-client-default-connection-pool-size=10
-```
+----
 
 == Setting a provider configuration option
 
-Provider configuration options are provided when starting the server, as shown in the following example:
+Provider configuration options are provided when starting the server. See all support configuration sources and formats for options in <@links.server id="configuration"/>. For example via a command line option:
 
 .Setting the `connection-pool-size` for the `default` provider of the `connections-http-client` SPI
 <@kc.start parameters="--spi-connections-http-client-default-connection-pool-size=10"/>
@@ -81,7 +84,7 @@ Once you do that, the server is going to make these additional dependencies avai
 
 == References
 
-* https://www.keycloak.org/server/configuration[Configuring Keycloak]
+* <@links.server id="configuration"/>
 * https://www.keycloak.org/docs/latest/server_development/#_providers[Server Developer Documentation]
 
 </@tmpl.guide>

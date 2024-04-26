@@ -3,7 +3,6 @@ import type { IndexRouteObject, RouteObject } from "react-router-dom";
 
 import { ErrorPage } from "./root/ErrorPage";
 import { Root } from "./root/Root";
-import { RootIndex } from "./root/RootIndex";
 
 const DeviceActivity = lazy(() => import("./account-security/DeviceActivity"));
 const LinkedAccounts = lazy(() => import("./account-security/LinkedAccounts"));
@@ -12,6 +11,7 @@ const Applications = lazy(() => import("./applications/Applications"));
 const Groups = lazy(() => import("./groups/Groups"));
 const PersonalInfo = lazy(() => import("./personal-info/PersonalInfo"));
 const Resources = lazy(() => import("./resources/Resources"));
+const ContentComponent = lazy(() => import("./content/ContentComponent"));
 
 export const DeviceActivityRoute: RouteObject = {
   path: "account-security/device-activity",
@@ -38,19 +38,23 @@ export const GroupsRoute: RouteObject = {
   element: <Groups />,
 };
 
-export const PersonalInfoRoute: RouteObject = {
-  path: "personal-info",
-  element: <PersonalInfo />,
-};
-
 export const ResourcesRoute: RouteObject = {
   path: "resources",
   element: <Resources />,
 };
 
-export const RootIndexRoute: IndexRouteObject = {
+export type ContentComponentParams = {
+  componentId: string;
+};
+
+export const ContentRoute: RouteObject = {
+  path: "/content/:componentId",
+  element: <ContentComponent />,
+};
+
+export const PersonalInfoRoute: IndexRouteObject = {
   index: true,
-  element: <RootIndex />,
+  element: <PersonalInfo />,
 };
 
 export const RootRoute: RouteObject = {
@@ -58,7 +62,7 @@ export const RootRoute: RouteObject = {
   element: <Root />,
   errorElement: <ErrorPage />,
   children: [
-    RootIndexRoute,
+    PersonalInfoRoute,
     DeviceActivityRoute,
     LinkedAccountsRoute,
     SigningInRoute,
@@ -66,6 +70,7 @@ export const RootRoute: RouteObject = {
     GroupsRoute,
     PersonalInfoRoute,
     ResourcesRoute,
+    ContentRoute,
   ],
 };
 

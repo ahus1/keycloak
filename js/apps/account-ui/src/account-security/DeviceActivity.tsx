@@ -15,32 +15,31 @@ import {
   Split,
   SplitItem,
   Title,
-  Tooltip,
 } from "@patternfly/react-core";
 import {
-  SyncAltIcon,
-  MobileAltIcon,
   DesktopIcon,
+  MobileAltIcon,
+  SyncAltIcon,
 } from "@patternfly/react-icons";
-import { TFuncKey } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ContinueCancelModal, useAlerts } from "ui-shared";
 import { deleteSession, getDevices } from "../api/methods";
 import {
+  ClientRepresentation,
   DeviceRepresentation,
   SessionRepresentation,
-  ClientRepresentation,
 } from "../api/representations";
-import { useAlerts, ContinueCancelModal } from "ui-shared";
-import useFormatter from "../components/formatter/format-date";
 import { Page } from "../components/page/Page";
-import { keycloak } from "../keycloak";
+import { TFuncKey } from "../i18n";
+import { useEnvironment } from "../root/KeycloakContext";
+import { formatDate } from "../utils/formatDate";
 import { usePromise } from "../utils/usePromise";
 
-const DeviceActivity = () => {
+export const DeviceActivity = () => {
   const { t } = useTranslation();
+  const context = useEnvironment();
   const { addAlert, addError } = useAlerts();
-  const { formatTime } = useFormatter();
 
   const [devices, setDevices] = useState<DeviceRepresentation[]>();
   const [key, setKey] = useState(0);
@@ -60,20 +59,24 @@ const DeviceActivity = () => {
     setDevices(devices);
   };
 
-  usePromise((signal) => getDevices({ signal }), moveCurrentToTop, [key]);
+  usePromise((signal) => getDevices({ signal, context }), moveCurrentToTop, [
+    key,
+  ]);
 
   const signOutAll = async () => {
-    await deleteSession();
-    keycloak.logout();
+    await deleteSession(context);
+    context.keycloak.logout();
   };
 
   const signOutSession = async (
     session: SessionRepresentation,
-    device: DeviceRepresentation
+    device: DeviceRepresentation,
   ) => {
     try {
-      await deleteSession(session.id);
-      addAlert(t("signedOutSession", [session.browser, device.os]));
+      await deleteSession(context, session.id);
+      addAlert(
+        t("signedOutSession", { browser: session.browser, os: device.os }),
+      );
       refresh();
     } catch (error) {
       addError(t("errorSignOutMessage", { error }).toString());
@@ -104,7 +107,7 @@ const DeviceActivity = () => {
 
   return (
     <Page
-      title={t("device-activity")}
+      title={t("deviceActivity")}
       description={t("signedInDevicesExplanation")}
     >
       <Split hasGutter className="pf-u-mb-lg">
@@ -114,25 +117,25 @@ const DeviceActivity = () => {
           </Title>
         </SplitItem>
         <SplitItem>
-          <Tooltip content={t("refreshPage")}>
-            <Button
-              aria-describedby="refresh page"
-              id="refresh-page"
-              variant="link"
-              onClick={() => refresh()}
-              icon={<SyncAltIcon />}
-            >
-              Refresh
-            </Button>
-          </Tooltip>
+          <Button
+            id="refresh-page"
+            variant="link"
+            onClick={() => refresh()}
+            icon={<SyncAltIcon />}
+          >
+            {t("refreshPage")}
+          </Button>
 
           {(devices.length > 1 || devices[0].sessions.length > 1) && (
             <ContinueCancelModal
               buttonTitle={t("signOutAllDevices")}
               modalTitle={t("signOutAllDevices")}
-              modalMessage={t("signOutAllDevicesWarning")}
+              continueLabel={t("confirm")}
+              cancelLabel={t("cancel")}
               onContinue={() => signOutAll()}
-            />
+            >
+              {t("signOutAllDevicesWarning")}
+            </ContinueCancelModal>
           )}
         </SplitItem>
       </Split>
@@ -140,10 +143,10 @@ const DeviceActivity = () => {
         className="signed-in-device-list"
         aria-label={t("signedInDevices")}
       >
-        <DataListItem aria-labelledby="sessions">
+        <DataListItem aria-labelledby={`sessions-${key}`}>
           {devices.map((device) =>
-            device.sessions.map((session) => (
-              <DataListItemRow key={device.id}>
+            device.sessions.map((session, index) => (
+              <DataListItemRow key={device.id} data-testid={`row-${index}`}>
                 <DataListContent
                   aria-label="device-sessions-content"
                   className="pf-u-flex-grow-1"
@@ -173,12 +176,15 @@ const DeviceActivity = () => {
                     >
                       {!session.current && (
                         <ContinueCancelModal
-                          buttonTitle={t("doSignOut")}
-                          modalTitle={t("doSignOut")}
+                          buttonTitle={t("signOut")}
+                          modalTitle={t("signOut")}
+                          continueLabel={t("confirm")}
+                          cancelLabel={t("cancel")}
                           buttonVariant="secondary"
-                          modalMessage={t("signOutWarning")}
                           onContinue={() => signOutSession(session, device)}
-                        />
+                        >
+                          {t("signOutWarning")}
+                        </ContinueCancelModal>
                       )}
                     </GridItem>
                     <GridItem span={11}>
@@ -201,7 +207,7 @@ const DeviceActivity = () => {
                             {t("lastAccessedOn")}
                           </DescriptionListTerm>
                           <DescriptionListDescription>
-                            {formatTime(session.lastAccess)}
+                            {formatDate(new Date(session.lastAccess * 1000))}
                           </DescriptionListDescription>
                         </DescriptionListGroup>
                         <DescriptionListGroup>
@@ -217,7 +223,7 @@ const DeviceActivity = () => {
                             {t("started")}
                           </DescriptionListTerm>
                           <DescriptionListDescription>
-                            {formatTime(session.started)}
+                            {formatDate(new Date(session.started * 1000))}
                           </DescriptionListDescription>
                         </DescriptionListGroup>
                         <DescriptionListGroup>
@@ -225,7 +231,7 @@ const DeviceActivity = () => {
                             {t("expires")}
                           </DescriptionListTerm>
                           <DescriptionListDescription>
-                            {formatTime(session.expires)}
+                            {formatDate(new Date(session.expires * 1000))}
                           </DescriptionListDescription>
                         </DescriptionListGroup>
                       </DescriptionList>
@@ -233,7 +239,7 @@ const DeviceActivity = () => {
                   </Grid>
                 </DataListContent>
               </DataListItemRow>
-            ))
+            )),
           )}
         </DataListItem>
       </DataList>

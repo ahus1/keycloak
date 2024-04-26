@@ -1,7 +1,5 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useFormContext, Controller } from "react-hook-form";
-import { FormGroup, Button, Checkbox } from "@patternfly/react-core";
+import type ClientScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientScopeRepresentation";
+import { Button, Checkbox, FormGroup } from "@patternfly/react-core";
 import { MinusCircleIcon } from "@patternfly/react-icons";
 import {
   TableComposable,
@@ -11,12 +9,15 @@ import {
   Thead,
   Tr,
 } from "@patternfly/react-table";
-
-import type ClientScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientScopeRepresentation";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
+import { useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { HelpItem } from "ui-shared";
-import { AddScopeDialog } from "../../scopes/AddScopeDialog";
+
+import { adminClient } from "../../../admin-client";
+import { useFetch } from "../../../utils/useFetch";
 import useLocaleSort, { mapByKey } from "../../../utils/useLocaleSort";
+import { AddScopeDialog } from "../../scopes/AddScopeDialog";
 
 export type RequiredIdValue = {
   id: string;
@@ -24,7 +25,7 @@ export type RequiredIdValue = {
 };
 
 export const ClientScope = () => {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const {
     control,
     getValues,
@@ -40,18 +41,19 @@ export const ClientScope = () => {
     ClientScopeRepresentation[]
   >([]);
 
-  const { adminClient } = useAdminClient();
   const localeSort = useLocaleSort();
 
   useFetch(
     () => adminClient.clientScopes.find(),
     (scopes) => {
       setSelectedScopes(
-        getValues("clientScopes").map((s) => scopes.find((c) => c.id === s.id)!)
+        getValues("clientScopes").map(
+          (s) => scopes.find((c) => c.id === s.id)!,
+        ),
       );
       setScopes(localeSort(scopes, mapByKey("name")));
     },
-    []
+    [],
   );
 
   return (
@@ -59,8 +61,8 @@ export const ClientScope = () => {
       label={t("clientScopes")}
       labelIcon={
         <HelpItem
-          helpText={t("clients-help:clientScopes")}
-          fieldLabelId="clients:clientScopes"
+          helpText={t("clientsClientScopesHelp")}
+          fieldLabelId="clientScopes"
         />
       }
       fieldId="clientScopes"
@@ -84,7 +86,7 @@ export const ClientScope = () => {
                   (scope) =>
                     !field.value
                       .map((c: RequiredIdValue) => c.id)
-                      .includes(scope.id!)
+                      .includes(scope.id!),
                 )}
                 isClientScopesConditionType
                 open={open}
@@ -119,9 +121,9 @@ export const ClientScope = () => {
         <TableComposable variant="compact">
           <Thead>
             <Tr>
-              <Th>{t("clientScope")}</Th>
+              <Th>{t("clientScopeTitle")}</Th>
               <Th>{t("required")}</Th>
-              <Th />
+              <Th aria-hidden="true" />
             </Tr>
           </Thead>
           <Tbody>
@@ -152,7 +154,7 @@ export const ClientScope = () => {
                     onClick={() => {
                       setValue("clientScopes", [
                         ...getValues("clientScopes").filter(
-                          (s) => s.id !== scope.id
+                          (s) => s.id !== scope.id,
                         ),
                       ]);
                       setSelectedScopes([

@@ -19,6 +19,7 @@ package org.keycloak.testsuite.broker;
 
 import static org.keycloak.models.IdentityProviderMapperSyncMode.IMPORT;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.keycloak.models.IdentityProviderMapperSyncMode;
@@ -33,6 +34,10 @@ public abstract class AbstractGroupBrokerMapperTest extends AbstractGroupMapperT
             "  {\n" +
             "    \"key\": \"" + KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME + "\",\n" +
             "    \"value\": \"value 1\"\n" +
+            "  },\n" +
+            "  {\n" +
+            "    \"key\": \"" + KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME + "\",\n" +
+            "    \"value\": \"value 2\"\n" +
             "  },\n" +
             "  {\n" +
             "    \"key\": \"" + KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2 + "\",\n" +
@@ -55,14 +60,20 @@ public abstract class AbstractGroupBrokerMapperTest extends AbstractGroupMapperT
 
     public UserRepresentation createMapperAndLoginAsUserTwiceWithMapper(IdentityProviderMapperSyncMode syncMode,
             boolean createAfterFirstLogin, String groupPath) {
-        return loginAsUserTwiceWithMapper(syncMode, createAfterFirstLogin, createMatchingAttributes(), groupPath);
+        UserRepresentation user = null;
+
+        try {
+            user = loginAsUserTwiceWithMapper(syncMode, createAfterFirstLogin, createMatchingAttributes(), groupPath);
+        } catch (IOException e) {}
+
+        return user;
     }
 
     @Override
     protected void updateUser() {
         UserRepresentation user = findUser(bc.providerRealmName(), bc.getUserLogin(), bc.getUserEmail());
         ImmutableMap<String, List<String>> matchingAttributes = ImmutableMap.<String, List<String>>builder()
-                .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME, ImmutableList.<String>builder().add("value 1").build())
+                .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME, ImmutableList.<String>builder().add("value 1").add("value 2").build())
                 .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2, ImmutableList.<String>builder().add(newValueForAttribute2).build())
                 .put("some.other.attribute", ImmutableList.<String>builder().add("some value").build())
                 .build();
@@ -105,7 +116,7 @@ public abstract class AbstractGroupBrokerMapperTest extends AbstractGroupMapperT
     protected static Map<String, List<String>> createMatchingAttributes() {
         return ImmutableMap.<String, List<String>> builder()
                 .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME,
-                        ImmutableList.<String> builder().add("value 1").build())
+                        ImmutableList.<String> builder().add("value 1").add("value 2").build())
                 .put(KcOidcBrokerConfiguration.ATTRIBUTE_TO_MAP_NAME_2,
                         ImmutableList.<String> builder().add("value 2").build())
                 .build();

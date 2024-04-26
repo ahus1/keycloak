@@ -1,24 +1,25 @@
-import { useState } from "react";
-import { Button, Label, Modal, ModalVariant } from "@patternfly/react-core";
-import { useTranslation } from "react-i18next";
-import { useFetch, useAdminClient } from "../context/auth/AdminClient";
-import type RoleRepresentation from "@keycloak/keycloak-admin-client/lib/defs/roleRepresentation";
-import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
 import type ClientProfileRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfileRepresentation";
+import type RoleRepresentation from "@keycloak/keycloak-admin-client/lib/defs/roleRepresentation";
+import { Button, Label, Modal, ModalVariant } from "@patternfly/react-core";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { adminClient } from "../admin-client";
+import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
+import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
+import { useFetch } from "../utils/useFetch";
 
 type ClientProfile = ClientProfileRepresentation & {
   global: boolean;
 };
 
 const AliasRenderer = ({ name, global }: ClientProfile) => {
-  const { t } = useTranslation("roles");
+  const { t } = useTranslation();
 
   return (
     <>
-      {name}{" "}
-      {global && <Label color="blue">{t("realm-settings:global")}</Label>}
+      {name} {global && <Label color="blue">{t("global")}</Label>}
     </>
   );
 };
@@ -31,8 +32,7 @@ export type AddClientProfileModalProps = {
 };
 
 export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
-  const { t } = useTranslation("roles");
-  const { adminClient } = useAdminClient();
+  const { t } = useTranslation();
   const [selectedRows, setSelectedRows] = useState<RoleRepresentation[]>([]);
 
   const [tableProfiles, setTableProfiles] = useState<ClientProfile[]>();
@@ -47,7 +47,7 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
         (globalProfiles) => ({
           ...globalProfiles,
           global: true,
-        })
+        }),
       );
 
       const profiles = allProfiles.profiles?.map((profiles) => ({
@@ -57,7 +57,7 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
 
       setTableProfiles([...(globalProfiles ?? []), ...(profiles ?? [])]);
     },
-    []
+    [],
   );
 
   const loader = async () =>
@@ -71,7 +71,7 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
   return (
     <Modal
       data-testid="addClientProfile"
-      title={t("realm-settings:addClientProfile")}
+      title={t("addClientProfile")}
       isOpen={props.open}
       onClose={props.toggleDialog}
       variant={ModalVariant.large}
@@ -86,7 +86,7 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
             props.onConfirm(selectedRows);
           }}
         >
-          {t("common:add")}
+          {t("add")}
         </Button>,
         <Button
           key="cancel"
@@ -95,14 +95,14 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
             props.toggleDialog();
           }}
         >
-          {t("common:cancel")}
+          {t("cancel")}
         </Button>,
       ]}
     >
       <KeycloakDataTable
         loader={loader}
-        ariaLabelKey="realm-settings:profilesList"
-        searchPlaceholderKey="realm-settings:searchProfile"
+        ariaLabelKey="profilesList"
+        searchPlaceholderKey="searchProfile"
         canSelectAll
         onSelect={(rows) => {
           setSelectedRows([...rows]);
@@ -110,12 +110,12 @@ export const AddClientProfileModal = (props: AddClientProfileModalProps) => {
         columns={[
           {
             name: "name",
-            displayKey: "realm-settings:clientProfileName",
+            displayKey: "clientProfileName",
             cellRenderer: AliasRenderer,
           },
           {
             name: "description",
-            displayKey: "common:description",
+            displayKey: "description",
           },
         ]}
         emptyState={

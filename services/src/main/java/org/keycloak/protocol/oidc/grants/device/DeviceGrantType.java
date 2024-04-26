@@ -18,12 +18,13 @@
 package org.keycloak.protocol.oidc.grants.device;
 
 import static org.keycloak.protocol.oidc.OIDCLoginProtocolService.tokenServiceBaseUrl;
-import static org.keycloak.utils.LockObjectsForModification.lockUserSessionsForModification;
 
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.common.Profile;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
+import org.keycloak.events.EventType;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
@@ -37,38 +38,42 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.SingleUseObjectProvider;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocolService;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpoint;
-import org.keycloak.protocol.oidc.endpoints.TokenEndpoint;
+import org.keycloak.protocol.oidc.grants.OAuth2GrantType;
+import org.keycloak.protocol.oidc.grants.OAuth2GrantTypeBase;
 import org.keycloak.protocol.oidc.grants.device.clientpolicy.context.DeviceTokenRequestContext;
 import org.keycloak.protocol.oidc.grants.device.clientpolicy.context.DeviceTokenResponseContext;
 import org.keycloak.protocol.oidc.grants.device.endpoints.DeviceEndpoint;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
 import org.keycloak.services.CorsErrorResponseException;
+import org.keycloak.services.ErrorResponseException;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.managers.UserSessionCrossDCManager;
-import org.keycloak.services.resources.Cors;
 import org.keycloak.services.resources.RealmsResource;
 import org.keycloak.services.util.DefaultClientSessionContext;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriInfo;
 
 import java.net.URI;
 import java.util.Map;
 
 /**
+ * OAuth 2.0 Device Authorization Grant
+ * https://datatracker.ietf.org/doc/html/rfc8628#section-3.4
+ *
  * @author <a href="mailto:h2-wada@nri.co.jp">Hiroyuki Wada</a>
  * @author <a href="mailto:michito.okai.zn@hitachi.com">Michito Okai</a>
  */
-public class DeviceGrantType {
+public class DeviceGrantType extends OAuth2GrantTypeBase {
 
     // OAuth 2.0 Device Authorization Grant
     public static final String OAUTH2_DEVICE_VERIFIED_USER_CODE = "OAUTH2_DEVICE_VERIFIED_USER_CODE";
@@ -145,29 +150,39 @@ public class DeviceGrantType {
         return flow != null;
     }
 
-    public static OAuth2DeviceCodeModel getDeviceByDeviceCode(KeycloakSession session, RealmModel realm, String deviceCode) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+    public static OAuth2DeviceCodeModel getDeviceByDeviceCode(KeycloakSession session, RealmModel realm, ClientModel client, EventBuilder event, String deviceCode) {
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         Map<String, String> notes = singleUseStore.get(OAuth2DeviceCodeModel.createKey(deviceCode));
-        return notes != null ? OAuth2DeviceCodeModel.fromCache(realm, deviceCode, notes) : null;
+        OAuth2DeviceCodeModel deviceCodeModel = notes != null ? OAuth2DeviceCodeModel.fromCache(realm, deviceCode, notes) : null;
+
+        if (deviceCodeModel != null) {
+            if (!client.getClientId().equals(deviceCodeModel.getClientId())) {
+                event.error(Errors.INVALID_OAUTH2_DEVICE_CODE);
+                throw new ErrorResponseException(OAuthErrorException.INVALID_GRANT, "unauthorized client",
+                        Response.Status.BAD_REQUEST);
+            }
+        }
+
+        return deviceCodeModel;
     }
 
     public static void removeDeviceByDeviceCode(KeycloakSession session, String deviceCode) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         singleUseStore.remove(OAuth2DeviceCodeModel.createKey(deviceCode));
     }
 
     public static void removeDeviceByUserCode(KeycloakSession session, RealmModel realm, String userCode) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         singleUseStore.remove(OAuth2DeviceUserCodeModel.createKey(realm, userCode));
     }
 
     public static boolean isPollingAllowed(KeycloakSession session, OAuth2DeviceCodeModel deviceCodeModel) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         return singleUseStore.putIfAbsent(deviceCodeModel.serializePollingKey(), deviceCodeModel.getPollingInterval());
     }
 
     public static boolean approveUserCode(KeycloakSession session, RealmModel realm, String userCode, String userSessionId, Map<String, String> additionalParams) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         OAuth2DeviceCodeModel deviceCodeModel = DeviceEndpoint.getDeviceByUserCode(session, realm, userCode);
 
         if (deviceCodeModel != null) {
@@ -179,7 +194,7 @@ public class DeviceGrantType {
     }
 
     public static boolean denyUserCode(KeycloakSession session, RealmModel realm, String userCode) {
-        SingleUseObjectProvider singleUseStore = session.getProvider(SingleUseObjectProvider.class);
+        SingleUseObjectProvider singleUseStore = session.singleUseObjects();
         OAuth2DeviceCodeModel deviceCodeModel = DeviceEndpoint.getDeviceByUserCode(session, realm, userCode);
 
         if (deviceCodeModel != null) {
@@ -190,30 +205,10 @@ public class DeviceGrantType {
         return false;
     }
 
-    private MultivaluedMap<String, String> formParams;
-    private ClientModel client;
+    @Override
+    public Response process(Context context) {
+        setContext(context);
 
-    private KeycloakSession session;
-
-    private TokenEndpoint tokenEndpoint;
-
-    private final RealmModel realm;
-    private final EventBuilder event;
-
-    private Cors cors;
-
-    public DeviceGrantType(MultivaluedMap<String, String> formParams, ClientModel client, KeycloakSession session,
-        TokenEndpoint tokenEndpoint, RealmModel realm, EventBuilder event, Cors cors) {
-        this.formParams = formParams;
-        this.client = client;
-        this.session = session;
-        this.tokenEndpoint = tokenEndpoint;
-        this.realm = realm;
-        this.event = event;
-        this.cors = cors;
-    }
-
-    public Response oauth2DeviceFlow() {
         if (!realm.getOAuth2DeviceConfig().isOAuth2DeviceAuthorizationGrantEnabled(client)) {
             event.error(Errors.NOT_ALLOWED);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_GRANT,
@@ -227,7 +222,7 @@ public class DeviceGrantType {
                 "Missing parameter: " + OAuth2Constants.DEVICE_CODE, Response.Status.BAD_REQUEST);
         }
 
-        OAuth2DeviceCodeModel deviceCodeModel = getDeviceByDeviceCode(session, realm, deviceCode);
+        OAuth2DeviceCodeModel deviceCodeModel = getDeviceByDeviceCode(session, realm, client, event, deviceCode);
 
         if (deviceCodeModel == null) {
             event.error(Errors.INVALID_OAUTH2_DEVICE_CODE);
@@ -280,7 +275,7 @@ public class DeviceGrantType {
             client.getId());
 
         if (userSession == null) {
-            userSession = lockUserSessionsForModification(session, () -> session.sessions().getUserSession(realm, userSessionId));
+            userSession = session.sessions().getUserSession(realm, userSessionId);
             if (userSession == null) {
                 throw new CorsErrorResponseException(cors, OAuthErrorException.AUTHORIZATION_PENDING,
                     "The authorization request is verified but can not lookup the user session yet",
@@ -342,6 +337,12 @@ public class DeviceGrantType {
         // Set nonce as an attribute in the ClientSessionContext. Will be used for the token generation
         clientSessionCtx.setAttribute(OIDCLoginProtocol.NONCE_PARAM, deviceCodeModel.getNonce());
 
-        return tokenEndpoint.createTokenResponse(user, userSession, clientSessionCtx, scopeParam, false, s -> {return new DeviceTokenResponseContext(deviceCodeModel, formParams, clientSession, s);});
+        return createTokenResponse(user, userSession, clientSessionCtx, scopeParam, false, s -> {return new DeviceTokenResponseContext(deviceCodeModel, formParams, clientSession, s);});
     }
+
+    @Override
+    public EventType getEventType() {
+        return EventType.OAUTH2_DEVICE_CODE_TO_TOKEN;
+    }
+
 }

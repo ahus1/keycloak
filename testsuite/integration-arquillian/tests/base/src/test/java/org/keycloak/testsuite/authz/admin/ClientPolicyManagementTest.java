@@ -24,8 +24,8 @@ import static org.junit.Assert.fail;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -169,12 +169,10 @@ public class ClientPolicyManagementTest extends AbstractPolicyManagementTest {
         client = clients.findByClientId("Client F").get(0);
         clients.get(client.getId()).remove();
 
-        try {
-            authorization.policies().client().findById(representation.getId()).toRepresentation();
-            fail("Client policy should be removed");
-        } catch (NotFoundException nfe) {
-            // ignore
-        }
+        representation = authorization.policies().client().findById(representation.getId()).toRepresentation();
+
+        Assert.assertEquals(0, representation.getClients().size());
+        Assert.assertFalse(representation.getClients().contains(client.getId()));
     }
 
     @Test
@@ -206,7 +204,9 @@ public class ClientPolicyManagementTest extends AbstractPolicyManagementTest {
         ClientPoliciesResource permissions = authorization.policies().client();
 
         try (Response response = permissions.create(representation)) {
+            assertResponseSuccessful(response);
             ClientPolicyRepresentation created = response.readEntity(ClientPolicyRepresentation.class);
+            getCleanup().addCleanup(() -> permissions.findById(created.getId()).remove());
             ClientPolicyResource permission = permissions.findById(created.getId());
             assertRepresentation(representation, permission);
         }

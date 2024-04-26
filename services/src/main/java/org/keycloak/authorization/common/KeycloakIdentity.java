@@ -38,15 +38,13 @@ import org.keycloak.services.ErrorResponseException;
 import org.keycloak.services.util.DefaultClientSessionContext;
 import org.keycloak.util.JsonSerialization;
 
-import javax.ws.rs.core.Response.Status;
+import jakarta.ws.rs.core.Response.Status;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import static org.keycloak.utils.LockObjectsForModification.lockUserSessionsForModification;
 
 /**
  * @author <a href="mailto:psilva@redhat.com">Pedro Igor</a>
@@ -99,13 +97,21 @@ public class KeycloakIdentity implements Identity {
                         values.add(valueIterator.next().asText());
                     }
                 } else {
-                    String value = fieldValue.asText();
+                    // If the claim is key value pair then just take it as is to attributes.
+                    if(!fieldValue.isObject()) {
+                        String value = fieldValue.asText();
 
-                    if (StringUtil.isNullOrEmpty(value)) {
-                        continue;
+                        if (StringUtil.isNullOrEmpty(value)) {
+                            continue;
+                        }
+                        values.add(value);
                     }
-
-                    values.add(value);
+                    // otherwise, the claim is a JSON object, turn it into json String, so it'll be able to evaluate it later
+                    // in the regex policy evaluator
+                    else
+                    {
+                        values.add(fieldValue.toString());
+                    }
                 }
 
                 if (!values.isEmpty()) {
@@ -120,7 +126,7 @@ public class KeycloakIdentity implements Identity {
             this.accessToken = AccessToken.class.cast(token);
         } else {
             UserSessionProvider sessions = keycloakSession.sessions();
-            UserSessionModel userSession = lockUserSessionsForModification(keycloakSession, () -> sessions.getUserSession(realm, token.getSessionState()));
+            UserSessionModel userSession = sessions.getUserSession(realm, token.getSessionState());
 
             if (userSession == null) {
                 userSession = sessions.getOfflineUserSession(realm, token.getSessionState());
@@ -289,7 +295,7 @@ public class KeycloakIdentity implements Identity {
         }
 
         UserSessionProvider sessions = keycloakSession.sessions();
-        UserSessionModel userSession = lockUserSessionsForModification(keycloakSession, () -> sessions.getUserSession(realm, accessToken.getSessionState()));
+        UserSessionModel userSession = sessions.getUserSession(realm, accessToken.getSessionState());
 
         if (userSession == null) {
             userSession = sessions.getOfflineUserSession(realm, accessToken.getSessionState());

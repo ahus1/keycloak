@@ -33,7 +33,7 @@ import org.keycloak.component.ComponentModel;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.LDAPConstants;
-import org.keycloak.models.LegacyRealmModel;
+import org.keycloak.models.StorageProviderRealmModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
@@ -60,7 +60,9 @@ import org.keycloak.testsuite.util.LDAPRule;
 import org.keycloak.testsuite.util.LDAPTestUtils;
 import org.keycloak.testsuite.util.WaitUtils;
 
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
+
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -149,7 +151,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
 
             // Assert lastSync time updated
             Assert.assertTrue(ctx.getLdapModel().getLastSync() > 0);
-            ((LegacyRealmModel) testRealm).getUserStorageProvidersStream().forEachOrdered(persistentFedModel -> {
+            ((StorageProviderRealmModel) testRealm).getUserStorageProvidersStream().forEachOrdered(persistentFedModel -> {
                 if (LDAPStorageProviderFactory.PROVIDER_NAME.equals(persistentFedModel.getProviderId())) {
                     Assert.assertTrue(persistentFedModel.getLastSync() > 0);
                 } else {
@@ -453,7 +455,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
             LDAPUtils.addMember(ctx.getLdapProvider(), MembershipType.DN, LDAPConstants.MEMBER, "not-used", group2, group1);
 
             ComponentModel mapperModel = LDAPTestUtils.getSubcomponentByName(appRealm, ctx.getLdapModel(), "groupsMapper");
-            LDAPTestUtils.updateGroupMapperConfigOptions(mapperModel, GroupMapperConfig.PRESERVE_GROUP_INHERITANCE, "false");
+            LDAPTestUtils.updateConfigOptions(mapperModel, GroupMapperConfig.PRESERVE_GROUP_INHERITANCE, "false");
             ctx.getRealm().updateComponent(mapperModel);
 
             // sync groups to Keycloak
@@ -464,7 +466,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
             LDAPTestContext ctx = LDAPTestContext.init(session);
             RealmModel appRealm = ctx.getRealm();
 
-            GroupModel kcGroup1 = KeycloakModelUtils.findGroupByPath(appRealm, "/group1");
+            GroupModel kcGroup1 = KeycloakModelUtils.findGroupByPath(session, appRealm, "/group1");
             String descriptionAttrName = LDAPTestUtils.getGroupDescriptionLDAPAttrName(ctx.getLdapProvider());
 
             Assert.assertEquals("group1 - description", kcGroup1.getFirstAttribute(descriptionAttrName));
@@ -489,7 +491,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
 
             // sync to Keycloak should pass without an error
             SynchronizationResult syncResult = new GroupLDAPStorageMapperFactory().create(session, mapperModel).syncDataFromFederationProviderToKeycloak(appRealm);
-            Assert.assertThat(syncResult.getFailed(), Matchers.is(0));
+            assertThat(syncResult.getFailed(), Matchers.is(0));
         });
 
         testingClient.server().run(session -> {
@@ -497,7 +499,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
             RealmModel appRealm = ctx.getRealm();
 
             // load previously synced group (a new group has been created in Keycloak)
-            GroupModel kcGroup5 = KeycloakModelUtils.findGroupByPath(appRealm, "/group5");
+            GroupModel kcGroup5 = KeycloakModelUtils.findGroupByPath(session, appRealm, "/group5");
             String descriptionAttrName = LDAPTestUtils.getGroupDescriptionLDAPAttrName(ctx.getLdapProvider());
 
             Assert.assertEquals("group5 - description", kcGroup5.getFirstAttribute(descriptionAttrName));
@@ -512,7 +514,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
             RealmModel appRealm = ctx.getRealm();
 
             // Remove all users from model
-            UserStoragePrivateUtil.userLocalStorage(session).getUsersStream(ctx.getRealm(), true)
+            UserStoragePrivateUtil.userLocalStorage(session).searchForUserStream(ctx.getRealm(), Map.of())
                     .peek(user -> System.out.println("trying to delete user: " + user.getUsername()))
                     .collect(Collectors.toList())
                     .forEach(user -> {
@@ -585,7 +587,7 @@ public class LDAPSyncTest extends AbstractLDAPTest {
             LDAPTestContext ctx = LDAPTestContext.init(session);
             RealmModel appRealm = ctx.getRealm();
 
-            GroupModel user8Group = KeycloakModelUtils.findGroupByPath(appRealm, "/user8group");
+            GroupModel user8Group = KeycloakModelUtils.findGroupByPath(session, appRealm, "/user8group");
             Assert.assertNotNull(user8Group);
             UserModel user8 = session.users().getUserByUsername(appRealm, "user8");
             Assert.assertNotNull(user8);

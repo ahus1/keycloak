@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import type PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
+import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
 import {
   Alert,
   AlertVariant,
@@ -18,28 +17,31 @@ import {
   Thead,
   Tr,
 } from "@patternfly/react-table";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Link, useNavigate } from "react-router-dom";
 
-import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
-import type PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
-import { useRealm } from "../../context/realm-context/RealmContext";
-import { toPolicyDetails } from "../routes/PolicyDetails";
-import { MoreLabel } from "./MoreLabel";
-import { toUpperCase } from "../../util";
+import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
+import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
 import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
+import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
+import { useRealm } from "../../context/realm-context/RealmContext";
+import { toUpperCase } from "../../util";
+import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
-import { NewPolicyDialog } from "./NewPolicyDialog";
 import { toCreatePolicy } from "../routes/NewPolicy";
 import { toPermissionDetails } from "../routes/PermissionDetails";
-import { SearchDropdown, SearchForm } from "./SearchDropdown";
+import { toPolicyDetails } from "../routes/PolicyDetails";
 import { DetailDescriptionLink } from "./DetailDescription";
+import { MoreLabel } from "./MoreLabel";
+import { NewPolicyDialog } from "./NewPolicyDialog";
+import { SearchDropdown, SearchForm } from "./SearchDropdown";
 
 type PoliciesProps = {
   clientId: string;
+  isDisabled?: boolean;
 };
 
 type ExpandablePolicyRepresentation = PolicyRepresentation & {
@@ -60,9 +62,11 @@ const DependentPoliciesRenderer = ({
   );
 };
 
-export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
-  const { t } = useTranslation("clients");
-  const { adminClient } = useAdminClient();
+export const AuthorizationPolicies = ({
+  clientId,
+  isDisabled = false,
+}: PoliciesProps) => {
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const { realm } = useRealm();
   const navigate = useNavigate();
@@ -110,15 +114,15 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
     },
     ([providers, ...policies]) => {
       setPolicyProviders(
-        providers.filter((p) => p.type !== "resource" && p.type !== "scope")
+        providers.filter((p) => p.type !== "resource" && p.type !== "scope"),
       );
       setPolicies(policies);
     },
-    [key, search, first, max]
+    [key, search, first, max],
   );
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:deletePolicy",
+    titleKey: "deletePolicy",
     children: (
       <>
         {t("deletePolicyConfirm")}
@@ -128,6 +132,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
               variant="warning"
               isInline
               isPlain
+              component="p"
               title={t("deletePolicyWarning")}
               className="pf-u-pt-lg"
             >
@@ -142,7 +147,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
           )}
       </>
     ),
-    continueButtonLabel: "clients:confirm",
+    continueButtonLabel: "confirm",
     onConfirm: async () => {
       try {
         await adminClient.clients.delPolicy({
@@ -152,7 +157,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
         addAlert(t("policyDeletedSuccess"), AlertVariant.success);
         refresh();
       } catch (error) {
-        addError("clients:policyDeletedError", error);
+        addError("policyDeletedError", error);
       }
     },
   });
@@ -173,7 +178,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
               policyProviders={policyProviders}
               onSelect={(p) =>
                 navigate(
-                  toCreatePolicy({ id: clientId, realm, policyType: p.type! })
+                  toCreatePolicy({ id: clientId, realm, policyType: p.type! }),
                 )
               }
               toggleDialog={toggleDialog}
@@ -197,10 +202,15 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
                     types={policyProviders}
                     search={search}
                     onSearch={setSearch}
+                    type="policy"
                   />
                 </ToolbarItem>
                 <ToolbarItem>
-                  <Button data-testid="createPolicy" onClick={toggleDialog}>
+                  <Button
+                    data-testid="createPolicy"
+                    onClick={toggleDialog}
+                    isDisabled={isDisabled}
+                  >
                     {t("createPolicy")}
                   </Button>
                 </ToolbarItem>
@@ -211,12 +221,12 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
               <TableComposable aria-label={t("resources")} variant="compact">
                 <Thead>
                   <Tr>
-                    <Th />
-                    <Th>{t("common:name")}</Th>
-                    <Th>{t("common:type")}</Th>
+                    <Th aria-hidden="true" />
+                    <Th>{t("name")}</Th>
+                    <Th>{t("type")}</Th>
                     <Th>{t("dependentPermission")}</Th>
-                    <Th>{t("common:description")}</Th>
-                    <Th />
+                    <Th>{t("description")}</Th>
+                    <Th aria-hidden="true" />
                   </Tr>
                 </Thead>
                 {policies.map((policy, rowIndex) => (
@@ -230,7 +240,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
                             const rows = policies.map((policy, index) =>
                               index === rowIndex
                                 ? { ...policy, isExpanded: !policy.isExpanded }
-                                : policy
+                                : policy,
                             );
                             setPolicies(rows);
                           },
@@ -253,26 +263,28 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
                         <DependentPoliciesRenderer row={policy} />
                       </Td>
                       <Td>{policy.description}</Td>
-                      <Td
-                        actions={{
-                          items: [
-                            {
-                              title: t("common:delete"),
-                              onClick: async () => {
-                                setSelectedPolicy(policy);
-                                toggleDeleteDialog();
+                      {!isDisabled && (
+                        <Td
+                          actions={{
+                            items: [
+                              {
+                                title: t("delete"),
+                                onClick: () => {
+                                  setSelectedPolicy(policy);
+                                  toggleDeleteDialog();
+                                },
                               },
-                            },
-                          ],
-                        }}
-                      />
+                            ],
+                          }}
+                        />
+                      )}
                     </Tr>
                     <Tr
                       key={`child-${policy.id}`}
                       isExpanded={policy.isExpanded}
                     >
                       <Td />
-                      <Td colSpan={4}>
+                      <Td colSpan={3 + (isDisabled ? 0 : 1)}>
                         <ExpandableRowContent>
                           {policy.isExpanded && (
                             <DescriptionList
@@ -307,8 +319,9 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
       {noData && searching && (
         <ListEmptyState
           isSearchVariant
-          message={t("common:noSearchResults")}
-          instructions={t("common:noSearchResultsInstructions")}
+          isDisabled={isDisabled}
+          message={t("noSearchResults")}
+          instructions={t("noSearchResultsInstructions")}
         />
       )}
       {noData && !searching && (
@@ -316,11 +329,11 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
           {newDialog && (
             <NewPolicyDialog
               policyProviders={policyProviders?.filter(
-                (p) => p.type !== "aggregate"
+                (p) => p.type !== "aggregate",
               )}
               onSelect={(p) =>
                 navigate(
-                  toCreatePolicy({ id: clientId, realm, policyType: p.type! })
+                  toCreatePolicy({ id: clientId, realm, policyType: p.type! }),
                 )
               }
               toggleDialog={toggleDialog}
@@ -329,6 +342,7 @@ export const AuthorizationPolicies = ({ clientId }: PoliciesProps) => {
           <ListEmptyState
             message={t("emptyPolicies")}
             instructions={t("emptyPoliciesInstructions")}
+            isDisabled={isDisabled}
             primaryActionText={t("createPolicy")}
             onPrimaryAction={toggleDialog}
           />

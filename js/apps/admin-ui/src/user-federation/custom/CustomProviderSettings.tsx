@@ -10,16 +10,16 @@ import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { HelpItem } from "ui-shared";
 
 import { useAlerts } from "../../components/alert/Alerts";
 import { DynamicComponents } from "../../components/dynamic/DynamicComponents";
-import { FormAccess } from "../../components/form-access/FormAccess";
-import { HelpItem } from "ui-shared";
+import { FormAccess } from "../../components/form/FormAccess";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { convertFormValuesToObject, convertToFormValues } from "../../util";
+import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import type { CustomUserFederationRouteParams } from "../routes/CustomUserFederation";
 import { toUserFederation } from "../routes/UserFederation";
@@ -27,10 +27,11 @@ import { ExtendedHeader } from "../shared/ExtendedHeader";
 import { SettingsCache } from "../shared/SettingsCache";
 import { SyncSettings } from "./SyncSettings";
 
+import { adminClient } from "../../admin-client";
 import "./custom-provider-settings.css";
 
 export default function CustomProviderSettings() {
-  const { t } = useTranslation("user-federation");
+  const { t } = useTranslation();
   const { id, providerId } = useParams<CustomUserFederationRouteParams>();
   const navigate = useNavigate();
   const form = useForm<ComponentRepresentation>({
@@ -44,7 +45,6 @@ export default function CustomProviderSettings() {
     formState: { errors, isDirty },
   } = form;
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
   const { realm: realmName } = useRealm();
   const [parentId, setParentId] = useState("");
@@ -66,10 +66,10 @@ export default function CustomProviderSettings() {
       if (fetchedComponent) {
         convertToFormValues(fetchedComponent, setValue);
       } else if (id) {
-        throw new Error(t("common:notFound"));
+        throw new Error(t("notFound"));
       }
     },
-    []
+    [],
   );
 
   useFetch(
@@ -78,7 +78,7 @@ export default function CustomProviderSettings() {
         realm: realmName,
       }),
     (realm) => setParentId(realm?.id!),
-    []
+    [],
   );
 
   const save = async (component: ComponentRepresentation) => {
@@ -88,7 +88,7 @@ export default function CustomProviderSettings() {
         Object.entries(component.config || {}).map(([key, value]) => [
           key,
           Array.isArray(value) ? value : [value],
-        ])
+        ]),
       ),
       providerId,
       providerType: "org.keycloak.storage.UserStorageProvider",
@@ -103,9 +103,15 @@ export default function CustomProviderSettings() {
         await adminClient.components.update({ id }, saveComponent);
       }
       reset({ ...component });
-      addAlert(t(!id ? "createSuccess" : "saveSuccess"), AlertVariant.success);
+      addAlert(
+        t(!id ? "createUserProviderSuccess" : "userProviderSaveSuccess"),
+        AlertVariant.success,
+      );
     } catch (error) {
-      addError(`user-federation:${!id ? "createError" : "saveError"}`, error);
+      addError(
+        `${!id ? "createUserProviderError" : "userProviderSaveError"}`,
+        error,
+      );
     }
   };
 
@@ -123,8 +129,8 @@ export default function CustomProviderSettings() {
             label={t("uiDisplayName")}
             labelIcon={
               <HelpItem
-                helpText={t("user-federation-help:uiDisplayNameHelp")}
-                fieldLabelId="user-federation:uiDisplayName"
+                helpText={t("uiDisplayNameHelp")}
+                fieldLabelId="uiDisplayName"
               />
             }
             helperTextInvalid={t("validateName")}
@@ -154,7 +160,7 @@ export default function CustomProviderSettings() {
               type="submit"
               data-testid="custom-save"
             >
-              {t("common:save")}
+              {t("save")}
             </Button>
             <Button
               variant="link"
@@ -163,7 +169,7 @@ export default function CustomProviderSettings() {
               )}
               data-testid="custom-cancel"
             >
-              {t("common:cancel")}
+              {t("cancel")}
             </Button>
           </ActionGroup>
         </FormAccess>

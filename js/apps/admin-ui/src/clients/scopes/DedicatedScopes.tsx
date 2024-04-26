@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
+import { adminClient } from "../../admin-client";
 import { MapperList } from "../../client-scopes/details/MapperList";
 import { useAlerts } from "../../components/alert/Alerts";
 import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
@@ -19,7 +20,7 @@ import {
   useRoutableTab,
 } from "../../components/routable-tabs/RoutableTabs";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
+import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import {
   DedicatedScopeDetailsParams,
@@ -27,14 +28,12 @@ import {
   toDedicatedScope,
 } from "../routes/DedicatedScopeDetails";
 import { toMapper } from "../routes/Mapper";
-import { DedicatedScope } from "./DecicatedScope";
+import { DedicatedScope } from "./DedicatedScope";
 
 export default function DedicatedScopes() {
-  const { t } = useTranslation("clients");
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { realm, clientId } = useParams<DedicatedScopeDetailsParams>();
-
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const [client, setClient] = useState<ClientRepresentation>();
@@ -52,7 +51,7 @@ export default function DedicatedScopes() {
   }
 
   const addMappers = async (
-    mappers: ProtocolMapperTypeRepresentation | ProtocolMapperRepresentation[]
+    mappers: ProtocolMapperTypeRepresentation | ProtocolMapperRepresentation[],
   ): Promise<void> => {
     if (!Array.isArray(mappers)) {
       const mapper = mappers as ProtocolMapperTypeRepresentation;
@@ -61,18 +60,18 @@ export default function DedicatedScopes() {
           realm,
           id: client.id!,
           mapperId: mapper.id!,
-        })
+        }),
       );
     } else {
       try {
         await adminClient.clients.addMultipleProtocolMappers(
           { id: client.id! },
-          mappers as ProtocolMapperRepresentation[]
+          mappers as ProtocolMapperRepresentation[],
         );
         setClient(await adminClient.clients.findOne({ id: client.id! }));
-        addAlert(t("common:mappingCreatedSuccess"), AlertVariant.success);
+        addAlert(t("mappingCreatedSuccess"), AlertVariant.success);
       } catch (error) {
-        addError("common:mappingCreatedError", error);
+        addError("mappingCreatedError", error);
       }
     }
   };
@@ -86,12 +85,12 @@ export default function DedicatedScopes() {
       setClient({
         ...client,
         protocolMappers: client.protocolMappers?.filter(
-          (m) => m.id !== mapper.id
+          (m) => m.id !== mapper.id,
         ),
       });
-      addAlert(t("common:mappingDeletedSuccess"), AlertVariant.success);
+      addAlert(t("mappingDeletedSuccess"), AlertVariant.success);
     } catch (error) {
-      addError("common:mappingDeletedError", error);
+      addError("mappingDeletedError", error);
     }
     return true;
   };
@@ -99,8 +98,8 @@ export default function DedicatedScopes() {
   return (
     <>
       <ViewHeader
-        titleKey={client.clientId!}
-        subKey="clients-help:dedicatedScopeExplain"
+        titleKey={client.clientId! + "-dedicated"}
+        subKey="dedicatedScopeExplain"
         divider={false}
       />
       <PageSection variant="light" className="pf-u-p-0">

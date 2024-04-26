@@ -65,22 +65,23 @@ import org.keycloak.testsuite.util.saml.StepWithCheckers;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.xml.soap.MessageFactory;
-import javax.xml.soap.SOAPBody;
-import javax.xml.soap.SOAPEnvelope;
-import javax.xml.soap.SOAPException;
-import javax.xml.soap.SOAPHeader;
-import javax.xml.soap.SOAPHeaderElement;
-import javax.xml.soap.SOAPMessage;
-import javax.xml.ws.soap.SOAPFaultException;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import jakarta.xml.soap.MessageFactory;
+import jakarta.xml.soap.SOAPBody;
+import jakarta.xml.soap.SOAPEnvelope;
+import jakarta.xml.soap.SOAPException;
+import jakarta.xml.soap.SOAPHeader;
+import jakarta.xml.soap.SOAPHeaderElement;
+import jakarta.xml.soap.SOAPMessage;
+import jakarta.xml.ws.soap.SOAPFaultException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyManagementException;
 import java.security.PrivateKey;
@@ -96,7 +97,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.keycloak.saml.common.constants.GeneralConstants.RELAY_STATE;
 import static org.keycloak.testsuite.util.Matchers.statusCodeIsHC;
@@ -639,6 +640,20 @@ public class SamlClient {
     }
 
     /**
+     * Extracts the form element from a Post binding.
+     *
+     * @param responsePage HTML code in the page
+     * @return The element that is the form
+     */
+    public static Element extractFormFromPostResponse(String responsePage) {
+        org.jsoup.nodes.Document theResponsePage = Jsoup.parse(responsePage);
+        Elements form = theResponsePage.select("form");
+        assertThat("Checking uniqueness of SAMLResponse/SAMLRequest form in Post binding", form.size(), is(1));
+
+        return form.first();
+    }
+
+    /**
      * Extracts and parses value of RelayState input field of a form present in the given page.
      *
      * @param responsePage HTML code of the page
@@ -661,7 +676,7 @@ public class SamlClient {
      * @return
      */
     public static String extractRelayStateFromRedirect(String responseUri) {
-        List<NameValuePair> params = URLEncodedUtils.parse(URI.create(responseUri), "UTF-8");
+        List<NameValuePair> params = URLEncodedUtils.parse(URI.create(responseUri), StandardCharsets.UTF_8);
 
         return params.stream().filter(nameValuePair -> nameValuePair.getName().equals(RELAY_STATE))
                 .findFirst().map(NameValuePair::getValue).orElse(null);

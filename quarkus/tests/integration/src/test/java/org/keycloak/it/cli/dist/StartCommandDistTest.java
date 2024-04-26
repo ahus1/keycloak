@@ -30,6 +30,8 @@ import org.keycloak.it.junit5.extension.DistributionTest;
 
 import io.quarkus.test.junit.main.Launch;
 import io.quarkus.test.junit.main.LaunchResult;
+import org.keycloak.it.junit5.extension.RawDistOnly;
+import org.keycloak.it.junit5.extension.WithEnvVars;
 import org.keycloak.it.utils.KeycloakDistribution;
 
 @DistributionTest
@@ -40,6 +42,13 @@ public class StartCommandDistTest {
     void failNoTls(LaunchResult result) {
         assertTrue(result.getOutput().contains("Key material not provided to setup HTTPS"),
                 () -> "The Output:\n" + result.getOutput() + "doesn't contains the expected string.");
+    }
+
+    @Test
+    @Launch({ "start", "--spi-events-listener-jboss-logging-success-level" })
+    void failSpiArgMissingValue(LaunchResult result) {
+        assertTrue(result.getErrorOutput().contains("spi argument --spi-events-listener-jboss-logging-success-level requires a value"),
+                () -> "The Output:\n" + result.getErrorOutput() + "doesn't contains the expected string.");
     }
 
     @Test
@@ -60,7 +69,7 @@ public class StartCommandDistTest {
     @Launch({ "-v", "start", "--db=dev-mem", OPTIMIZED_BUILD_OPTION_LONG})
     void failBuildPropertyNotAvailable(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        cliResult.assertError("Unknown option: '--db'");
+        cliResult.assertError("Build time option: '--db' not usable with pre-built image and --optimized");
     }
 
     @Test
@@ -87,7 +96,7 @@ public class StartCommandDistTest {
         cliResult.assertMessage("Server configuration updated and persisted. Run the following command to review the configuration:");
         cliResult.assertMessage(KeycloakDistribution.SCRIPT_CMD + " show-config");
         cliResult.assertMessage("Next time you run the server, just run:");
-        cliResult.assertMessage(KeycloakDistribution.SCRIPT_CMD + " start " + OPTIMIZED_BUILD_OPTION_LONG + " --http-enabled=true --hostname-strict=false");
+        cliResult.assertMessage(KeycloakDistribution.SCRIPT_CMD + " start --http-enabled=true --hostname-strict=false " + OPTIMIZED_BUILD_OPTION_LONG);
         assertFalse(cliResult.getOutput().contains("--metrics-enabled"));
         cliResult.assertStarted();
     }
@@ -96,7 +105,51 @@ public class StartCommandDistTest {
     @Launch({ "start", "--optimized", "--http-enabled=true", "--hostname-strict=false", "--cache=local" })
     void testStartUsingOptimizedDoesNotAllowBuildOptions(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        cliResult.assertError("Unknown option: '--cache'");
+        cliResult.assertError("Build time option: '--cache' not usable with pre-built image and --optimized");
     }
 
+    @Test
+    @WithEnvVars({"KC_LOG", "invalid"})
+    @Launch({ "start", "--optimized" })
+    void testStartUsingOptimizedInvalidEnvOption(LaunchResult result) {
+        CLIResult cliResult = (CLIResult) result;
+        cliResult.assertError("Invalid value for option 'kc.log': invalid. Expected values are: console, file, gelf. From ConfigSource KcEnvVarConfigSource");
+    }
+
+    @Test
+    @RawDistOnly(reason = "Containers are immutable")
+    void testWarningWhenOverridingBuildOptionsDuringStart(KeycloakDistribution dist) {
+        CLIResult cliResult = dist.run("build", "--db=postgres", "--cache=local", "--features=preview");
+        cliResult.assertBuild();
+        cliResult = dist.run("start", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertMessage("The previous optimized build will be overridden with the following build options:");
+        cliResult.assertMessage("- cache=local > cache=ispn"); // back to the default value
+        cliResult.assertMessage("- db=postgres > db=dev-file"); // back to the default value
+        cliResult.assertMessage("- features=preview > features=<unset>"); // no default value, the <unset> is shown
+        cliResult.assertMessage("To avoid that, run the 'build' command again and then start the optimized server instance using the '--optimized' flag.");
+        cliResult.assertStarted();
+        // should not show warning if the re-augmentation did not happen through the build command
+        // an optimized server image should ideally be created by running a build
+        cliResult = dist.run("start", "--db=dev-mem", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertNoMessage("The previous optimized build will be overridden with the following build options:");
+        cliResult.assertStarted();
+        dist.run("build", "--db=postgres");
+        cliResult = dist.run("start", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertMessage("- db=postgres > db=dev-file");
+        cliResult.assertNoMessage("- cache=local > cache=ispn");
+        cliResult.assertNoMessage("- features=preview > features=<unset>");
+        cliResult.assertStarted();
+        dist.run("build", "--db=postgres");
+        cliResult = dist.run("start", "--db=dev-mem", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertMessage("- db=postgres > db=dev-mem"); // option overridden during the start
+        cliResult.assertStarted();
+        dist.run("build", "--db=dev-mem", "--cache=local");
+        cliResult = dist.run("start", "--db=dev-mem", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertNoMessage("- db=postgres > db=postgres"); // option did not change not need to show
+        cliResult.assertMessage("- cache=local > cache=ispn");
+        cliResult.assertStarted();
+        dist.run("build", "--db=dev-mem", "--cache=local");
+        cliResult = dist.run("start", "--db=dev-mem", "--cache=local", "--hostname=localhost", "--http-enabled=true");
+        cliResult.assertNoMessage("The previous optimized build will be overridden with the following build options:"); // no message, same values provided during auto-build
+    }
 }

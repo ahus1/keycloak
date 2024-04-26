@@ -46,8 +46,8 @@ import org.keycloak.representations.idm.authorization.ResourceServerRepresentati
 import org.keycloak.testsuite.arquillian.annotation.UncaughtServerErrorExpected;
 import org.keycloak.util.JsonSerialization;
 
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -240,6 +240,35 @@ public class ClientRegistrationTest extends AbstractClientRegistrationTest {
         client.setDefaultRoles(new String[]{"test-default-role1","test-default-role2"});
         ClientRepresentation updatedClient = reg.update(client);
         assertThat(updatedClient.getDefaultRoles(), Matchers.arrayContainingInAnyOrder("test-default-role1","test-default-role2"));
+    }
+
+    @Test
+    public void updateClientScopes() throws ClientRegistrationException {
+        authManageClients();
+        ClientRepresentation client = buildClient();
+        ArrayList<String> optionalClientScopes = new ArrayList<>(List.of("address"));
+        client.setOptionalClientScopes(optionalClientScopes);
+
+        ClientRepresentation createdClient = registerClient(client);
+        Set<String> requestedClientScopes = new HashSet<>(optionalClientScopes);
+        Set<String> registeredClientScopes = new HashSet<>(createdClient.getOptionalClientScopes());
+        assertEquals(requestedClientScopes, registeredClientScopes);
+        assertTrue(createdClient.getDefaultClientScopes().isEmpty());
+
+        authManageClients();
+        ClientRepresentation obtainedClient = reg.get(CLIENT_ID);
+        registeredClientScopes = new HashSet<>(obtainedClient.getOptionalClientScopes());
+        assertEquals(requestedClientScopes, registeredClientScopes);
+        assertTrue(obtainedClient.getDefaultClientScopes().isEmpty());
+
+
+        optionalClientScopes = new ArrayList<>(List.of("address", "phone"));
+        client.setOptionalClientScopes(optionalClientScopes);
+        ClientRepresentation updatedClient = reg.update(client);
+        requestedClientScopes = new HashSet<>(optionalClientScopes);
+        registeredClientScopes = new HashSet<>(updatedClient.getOptionalClientScopes());
+        assertEquals(requestedClientScopes, registeredClientScopes);
+        assertTrue(updatedClient.getDefaultClientScopes().isEmpty());
     }
 
     @Test

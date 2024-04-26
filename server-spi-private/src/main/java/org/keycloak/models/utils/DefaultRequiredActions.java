@@ -23,6 +23,7 @@ import org.keycloak.models.RequiredActionProviderModel;
 import org.keycloak.models.UserModel;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -80,7 +81,8 @@ public class DefaultRequiredActions {
         UPDATE_EMAIL(UserModel.RequiredAction.UPDATE_EMAIL.name(), DefaultRequiredActions::addUpdateEmailAction, () -> isFeatureEnabled(Profile.Feature.UPDATE_EMAIL)),
         CONFIGURE_RECOVERY_AUTHN_CODES(UserModel.RequiredAction.CONFIGURE_RECOVERY_AUTHN_CODES.name(), DefaultRequiredActions::addRecoveryAuthnCodesAction, () -> isFeatureEnabled(Profile.Feature.RECOVERY_CODES)),
         WEBAUTHN_REGISTER("webauthn-register", DefaultRequiredActions::addWebAuthnRegisterAction, () -> isFeatureEnabled(Profile.Feature.WEB_AUTHN)),
-        WEBAUTHN_PASSWORDLESS_REGISTER("webauthn-register-passwordless", DefaultRequiredActions::addWebAuthnPasswordlessRegisterAction, () -> isFeatureEnabled(Profile.Feature.WEB_AUTHN));
+        WEBAUTHN_PASSWORDLESS_REGISTER("webauthn-register-passwordless", DefaultRequiredActions::addWebAuthnPasswordlessRegisterAction, () -> isFeatureEnabled(Profile.Feature.WEB_AUTHN)),
+        VERIFY_USER_PROFILE(UserModel.RequiredAction.VERIFY_PROFILE.name(), DefaultRequiredActions::addVerifyProfile);
 
         private final String alias;
         private final Consumer<RealmModel> addAction;
@@ -177,6 +179,19 @@ public class DefaultRequiredActions {
             termsAndConditions.setProviderId(UserModel.RequiredAction.TERMS_AND_CONDITIONS.name());
             termsAndConditions.setDefaultAction(false);
             termsAndConditions.setPriority(20);
+            realm.addRequiredActionProvider(termsAndConditions);
+        }
+    }
+
+    public static void addVerifyProfile(RealmModel realm) {
+        if (realm.getRequiredActionProviderByAlias(UserModel.RequiredAction.VERIFY_PROFILE.name()) == null) {
+            RequiredActionProviderModel termsAndConditions = new RequiredActionProviderModel();
+            termsAndConditions.setEnabled(true);
+            termsAndConditions.setAlias(UserModel.RequiredAction.VERIFY_PROFILE.name());
+            termsAndConditions.setName("Verify Profile");
+            termsAndConditions.setProviderId(UserModel.RequiredAction.VERIFY_PROFILE.name());
+            termsAndConditions.setDefaultAction(false);
+            termsAndConditions.setPriority(90);
             realm.addRequiredActionProvider(termsAndConditions);
         }
     }
@@ -291,6 +306,13 @@ public class DefaultRequiredActions {
         }
     }
 
+    private static final HashSet<String> REQUIRED_ACTIONS = new HashSet<>();
+    static {
+        for (UserModel.RequiredAction value : UserModel.RequiredAction.values()) {
+            REQUIRED_ACTIONS.add(value.name());
+        }
+    }
+
     /**
      * Checks whether given {@code providerId} case insensitively matches any of {@link UserModel.RequiredAction} enum
      * and if yes, it returns the value in correct form.
@@ -303,10 +325,13 @@ public class DefaultRequiredActions {
      *         of {@link UserModel.RequiredAction}
      */
     public static String getDefaultRequiredActionCaseInsensitively(String providerId) {
-        try {
-            return UserModel.RequiredAction.valueOf(providerId.toUpperCase()).name();
-        } catch (IllegalArgumentException iae) {
-            return providerId;
+        if (providerId == null) {
+            return null;
         }
+        String upperCase = providerId.toUpperCase();
+        if (REQUIRED_ACTIONS.contains(upperCase)) {
+            return upperCase;
+        }
+        return providerId;
     }
 }

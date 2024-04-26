@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import type PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
+import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
 import {
   Alert,
   AlertVariant,
@@ -22,29 +21,32 @@ import {
   Thead,
   Tr,
 } from "@patternfly/react-table";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Link, useNavigate } from "react-router-dom";
 
-import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
-import type PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
-import useToggle from "../../utils/useToggle";
+import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
+import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
+import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
+import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
 import { useRealm } from "../../context/realm-context/RealmContext";
-import { SearchDropdown, SearchForm } from "./SearchDropdown";
-import { MoreLabel } from "./MoreLabel";
-import { DetailDescriptionLink } from "./DetailDescription";
-import { EmptyPermissionsState } from "./EmptyPermissionsState";
+import { useFetch } from "../../utils/useFetch";
+import useToggle from "../../utils/useToggle";
 import { toNewPermission } from "../routes/NewPermission";
 import { toPermissionDetails } from "../routes/PermissionDetails";
-import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
 import { toPolicyDetails } from "../routes/PolicyDetails";
+import { DetailDescriptionLink } from "./DetailDescription";
+import { EmptyPermissionsState } from "./EmptyPermissionsState";
+import { MoreLabel } from "./MoreLabel";
+import { SearchDropdown, SearchForm } from "./SearchDropdown";
 
 import "./permissions.css";
 
 type PermissionsProps = {
   clientId: string;
+  isDisabled?: boolean;
 };
 
 type ExpandablePolicyRepresentation = PolicyRepresentation & {
@@ -65,10 +67,12 @@ const AssociatedPoliciesRenderer = ({
   );
 };
 
-export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
-  const { t } = useTranslation("clients");
+export const AuthorizationPermissions = ({
+  clientId,
+  isDisabled = false,
+}: PermissionsProps) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
   const { realm } = useRealm();
 
@@ -113,11 +117,11 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
             associatedPolicies,
             isExpanded: false,
           };
-        })
+        }),
       );
     },
     setPermissions,
-    [key, search, first, max]
+    [key, search, first, max],
   );
 
   useFetch(
@@ -135,7 +139,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
       ]);
       return {
         policies: policies.filter(
-          (p) => p.type === "resource" || p.type === "scope"
+          (p) => p.type === "resource" || p.type === "scope",
         ),
         resources: resources.length !== 1,
         scopes: scopes.length !== 1,
@@ -145,16 +149,16 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
       setPolicyProviders(policies);
       setDisabledCreate({ resources, scopes });
     },
-    []
+    [],
   );
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "clients:deletePermission",
+    titleKey: "deletePermission",
     messageKey: t("deletePermissionConfirm", {
       permission: selectedPermission?.name,
     }),
     continueButtonVariant: ButtonVariant.danger,
-    continueButtonLabel: "clients:confirm",
+    continueButtonLabel: "confirm",
     onConfirm: async () => {
       try {
         await adminClient.clients.delPermission({
@@ -165,7 +169,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
         addAlert(t("permissionDeletedSuccess"), AlertVariant.success);
         refresh();
       } catch (error) {
-        addError("clients:permissionDeletedError", error);
+        addError("permissionDeletedError", error);
       }
     },
   });
@@ -197,6 +201,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                   types={policyProviders}
                   search={search}
                   onSearch={setSearch}
+                  type="permission"
                 />
               </ToolbarItem>
               <ToolbarItem>
@@ -204,6 +209,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                   toggle={
                     <DropdownToggle
                       onToggle={toggleCreate}
+                      isDisabled={isDisabled}
                       isPrimary
                       data-testid="permissionCreateDropdown"
                     >
@@ -215,7 +221,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                     <DropdownItem
                       data-testid="create-resource"
                       key="createResourceBasedPermission"
-                      isDisabled={disabledCreate?.resources}
+                      isDisabled={isDisabled || disabledCreate?.resources}
                       component="button"
                       onClick={() =>
                         navigate(
@@ -223,7 +229,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                             realm,
                             id: clientId,
                             permissionType: "resource",
-                          })
+                          }),
                         )
                       }
                     >
@@ -233,7 +239,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                     <DropdownItem
                       data-testid="create-scope"
                       key="createScopeBasedPermission"
-                      isDisabled={disabledCreate?.scopes}
+                      isDisabled={isDisabled || disabledCreate?.scopes}
                       component="button"
                       onClick={() =>
                         navigate(
@@ -241,7 +247,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                             realm,
                             id: clientId,
                             permissionType: "scope",
-                          })
+                          }),
                         )
                       }
                     >
@@ -266,12 +272,12 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
             <TableComposable aria-label={t("resources")} variant="compact">
               <Thead>
                 <Tr>
-                  <Th />
-                  <Th>{t("common:name")}</Th>
-                  <Th>{t("common:type")}</Th>
+                  <Th aria-hidden="true" />
+                  <Th>{t("name")}</Th>
+                  <Th>{t("type")}</Th>
                   <Th>{t("associatedPolicy")}</Th>
-                  <Th>{t("common:description")}</Th>
-                  <Th />
+                  <Th>{t("description")}</Th>
+                  <Th aria-hidden="true" />
                 </Tr>
               </Thead>
               {permissions.map((permission, rowIndex) => (
@@ -285,7 +291,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                           const rows = permissions.map((p, index) =>
                             index === rowIndex
                               ? { ...p, isExpanded: !p.isExpanded }
-                              : p
+                              : p,
                           );
                           setPermissions(rows);
                         },
@@ -317,7 +323,7 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
                       actions={{
                         items: [
                           {
-                            title: t("common:delete"),
+                            title: t("delete"),
                             onClick: async () => {
                               setSelectedPermission(permission);
                               toggleDeleteDialog();
@@ -366,15 +372,15 @@ export const AuthorizationPermissions = ({ clientId }: PermissionsProps) => {
       {noData && !searching && (
         <EmptyPermissionsState
           clientId={clientId}
-          isResourceEnabled={disabledCreate?.resources}
-          isScopeEnabled={disabledCreate?.scopes}
+          isResourceEnabled={!isDisabled && disabledCreate?.resources}
+          isScopeEnabled={!isDisabled && disabledCreate?.scopes}
         />
       )}
       {noData && searching && (
         <ListEmptyState
           isSearchVariant
-          message={t("common:noSearchResults")}
-          instructions={t("common:noSearchResultsInstructions")}
+          message={t("noSearchResults")}
+          instructions={t("noSearchResultsInstructions")}
         />
       )}
     </PageSection>

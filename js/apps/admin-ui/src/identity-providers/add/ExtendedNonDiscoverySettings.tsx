@@ -25,7 +25,7 @@ const promptOptions = {
 };
 
 export const ExtendedNonDiscoverySettings = () => {
-  const { t } = useTranslation("identity-providers");
+  const { t } = useTranslation();
   const { control } = useFormContext();
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -45,7 +45,17 @@ export const ExtendedNonDiscoverySettings = () => {
           field="config.backchannelSupported"
           label="backchannelLogout"
         />
+        <SwitchField
+          field="config.sendIdTokenOnLogout"
+          label="sendIdTokenOnLogout"
+          defaultValue={"true"}
+        />
+        <SwitchField
+          field="config.sendClientIdOnLogout"
+          label="sendClientIdOnLogout"
+        />
         <SwitchField field="config.disableUserInfo" label="disableUserInfo" />
+        <SwitchField field="config.disableNonce" label="disableNonce" />
         <TextField field="config.defaultScope" label="scopes" />
         <FormGroupField label="prompt">
           <Controller
@@ -87,8 +97,8 @@ export const ExtendedNonDiscoverySettings = () => {
           label={t("allowedClockSkew")}
           labelIcon={
             <HelpItem
-              helpText={"identity-providers-help:allowedClockSkew"}
-              fieldLabelId="identity-providers:allowedClockSkew"
+              helpText={t("allowedClockSkewHelp")}
+              fieldLabelId="allowedClockSkew"
             />
           }
           fieldId="allowedClockSkew"
@@ -111,7 +121,7 @@ export const ExtendedNonDiscoverySettings = () => {
                   onMinus={() => field.onChange(v - 1)}
                   onChange={(event) => {
                     const value = Number(
-                      (event.target as HTMLInputElement).value
+                      (event.target as HTMLInputElement).value,
                     );
                     field.onChange(value < 0 ? 0 : value);
                   }}

@@ -19,18 +19,22 @@ import { useState } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { HelpItem } from "ui-shared";
 
+import { adminClient } from "../../../admin-client";
 import { useAlerts } from "../../../components/alert/Alerts";
 import { useConfirmDialog } from "../../../components/confirm-dialog/ConfirmDialog";
-import { DynamicComponents } from "../../../components/dynamic/DynamicComponents";
-import { FormAccess } from "../../../components/form-access/FormAccess";
-import { HelpItem } from "ui-shared";
+import {
+  DynamicComponents,
+  convertToName,
+} from "../../../components/dynamic/DynamicComponents";
+import { FormAccess } from "../../../components/form/FormAccess";
 import { KeycloakSpinner } from "../../../components/keycloak-spinner/KeycloakSpinner";
 import { KeycloakTextInput } from "../../../components/keycloak-text-input/KeycloakTextInput";
 import { ViewHeader } from "../../../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../../../context/auth/AdminClient";
 import { useRealm } from "../../../context/realm-context/RealmContext";
 import { convertFormValuesToObject, convertToFormValues } from "../../../util";
+import { useFetch } from "../../../utils/useFetch";
 import { useParams } from "../../../utils/useParams";
 import { toUserFederationLdap } from "../../routes/UserFederationLdap";
 import { UserFederationLdapMapperParams } from "../../routes/UserFederationLdapMapper";
@@ -40,11 +44,10 @@ export default function LdapMapperDetails() {
   const [mapping, setMapping] = useState<ComponentRepresentation>();
   const [components, setComponents] = useState<ComponentTypeRepresentation[]>();
 
-  const { adminClient } = useAdminClient();
   const { id, mapperId } = useParams<UserFederationLdapMapperParams>();
   const navigate = useNavigate();
   const { realm } = useRealm();
-  const { t } = useTranslation("user-federation");
+  const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
 
   const [isMapperDropdownOpen, setIsMapperDropdownOpen] = useState(false);
@@ -68,12 +71,11 @@ export default function LdapMapperDetails() {
     ({ components, fetchedMapper }) => {
       setMapping(fetchedMapper);
       setComponents(components);
-      if (mapperId !== "new" && !fetchedMapper)
-        throw new Error(t("common:notFound"));
+      if (mapperId !== "new" && !fetchedMapper) throw new Error(t("notFound"));
 
       if (fetchedMapper) setupForm(fetchedMapper);
     },
-    []
+    [],
   );
 
   const setupForm = (mapper: ComponentRepresentation) => {
@@ -90,7 +92,7 @@ export default function LdapMapperDetails() {
           result[key] = Array.isArray(value) ? value : [value];
           return result;
         },
-        {} as Record<string, string | string[]>
+        {} as Record<string, string | string[]>,
       ),
     };
 
@@ -98,7 +100,7 @@ export default function LdapMapperDetails() {
       if (mapperId === "new") {
         await adminClient.components.create(map);
         navigate(
-          toUserFederationLdap({ realm, id: mapper.parentId!, tab: "mappers" })
+          toUserFederationLdap({ realm, id: mapper.parentId!, tab: "mappers" }),
         );
       } else {
         await adminClient.components.update({ id: mapperId }, map);
@@ -107,17 +109,15 @@ export default function LdapMapperDetails() {
       addAlert(
         t(
           mapperId === "new"
-            ? "common:mappingCreatedSuccess"
-            : "common:mappingUpdatedSuccess"
+            ? "mappingCreatedSuccess"
+            : "mappingUpdatedSuccess",
         ),
-        AlertVariant.success
+        AlertVariant.success,
       );
     } catch (error) {
       addError(
-        mapperId === "new"
-          ? "common:mappingCreatedError"
-          : "common:mappingUpdatedError",
-        error
+        mapperId === "new" ? "mappingCreatedError" : "mappingUpdatedError",
+        error,
       );
     }
   };
@@ -132,28 +132,28 @@ export default function LdapMapperDetails() {
       addAlert(
         t("syncLDAPGroupsSuccessful", {
           result: result.status,
-        })
+        }),
       );
     } catch (error) {
-      addError("user-federation:syncLDAPGroupsError", error);
+      addError("syncLDAPGroupsError", error);
     }
     refresh();
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "common:deleteMappingTitle",
-    messageKey: "common:deleteMappingConfirm",
-    continueButtonLabel: "common:delete",
+    titleKey: "deleteMappingTitle",
+    messageKey: "deleteMappingConfirm",
+    continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
       try {
         await adminClient.components.del({
           id: mapping!.id!,
         });
-        addAlert(t("common:mappingDeletedSuccess"), AlertVariant.success);
+        addAlert(t("mappingDeletedSuccess"), AlertVariant.success);
         navigate(toUserFederationLdap({ id, realm, tab: "mappers" }));
       } catch (error) {
-        addError("common:mappingDeletedError", error);
+        addError("mappingDeletedError", error);
       }
     },
   });
@@ -174,39 +174,43 @@ export default function LdapMapperDetails() {
       <DeleteConfirm />
       <ViewHeader
         key={key}
-        titleKey={mapping ? mapping.name! : t("common:createNewMapper")}
+        titleKey={mapping ? mapping.name! : t("createNewMapper")}
         dropdownItems={
           isNew
             ? undefined
             : [
                 <DropdownItem key="delete" onClick={toggleDeleteDialog}>
-                  {t("common:delete")}
+                  {t("delete")}
                 </DropdownItem>,
-                mapper?.metadata.fedToKeycloakSyncSupported && (
-                  <DropdownItem
-                    key="fedSync"
-                    onClick={() => sync("fedToKeycloak")}
-                  >
-                    {t("syncLDAPGroupsToKeycloak")}
-                  </DropdownItem>
-                ),
-                mapper?.metadata.keycloakToFedSyncSupported && (
-                  <DropdownItem
-                    key="ldapSync"
-                    onClick={() => {
-                      sync("keycloakToFed");
-                    }}
-                  >
-                    {t("syncKeycloakGroupsToLDAP")}
-                  </DropdownItem>
-                ),
+                ...(mapper?.metadata.fedToKeycloakSyncSupported
+                  ? [
+                      <DropdownItem
+                        key="fedSync"
+                        onClick={() => sync("fedToKeycloak")}
+                      >
+                        {t(mapper.metadata.fedToKeycloakSyncMessage)}
+                      </DropdownItem>,
+                    ]
+                  : []),
+                ...(mapper?.metadata.keycloakToFedSyncSupported
+                  ? [
+                      <DropdownItem
+                        key="ldapSync"
+                        onClick={() => {
+                          sync("keycloakToFed");
+                        }}
+                      >
+                        {t(mapper.metadata.keycloakToFedSyncMessage)}
+                      </DropdownItem>,
+                    ]
+                  : []),
               ]
         }
       />
       <PageSection variant="light" isFilled>
         <FormAccess role="manage-realm" isHorizontal>
           {!isNew && (
-            <FormGroup label={t("common:id")} fieldId="kc-ldap-mapper-id">
+            <FormGroup label={t("id")} fieldId="kc-ldap-mapper-id">
               <KeycloakTextInput
                 isDisabled
                 id="kc-ldap-mapper-id"
@@ -216,12 +220,9 @@ export default function LdapMapperDetails() {
             </FormGroup>
           )}
           <FormGroup
-            label={t("common:name")}
+            label={t("name")}
             labelIcon={
-              <HelpItem
-                helpText={t("user-federation-help:nameHelp")}
-                fieldLabelId="name"
-              />
+              <HelpItem helpText={t("nameHelp")} fieldLabelId="name" />
             }
             fieldId="kc-ldap-mapper-name"
             isRequired
@@ -255,13 +256,11 @@ export default function LdapMapperDetails() {
           </FormGroup>
           {!isNew ? (
             <FormGroup
-              label={t("common:mapperType")}
+              label={t("mapperType")}
               labelIcon={
                 <HelpItem
                   helpText={
-                    mapper?.helpText
-                      ? mapper.helpText
-                      : t("user-federation-help:mapperTypeHelp")
+                    mapper?.helpText ? mapper.helpText : t("mapperTypeHelp")
                   }
                   fieldLabelId="mapperType"
                 />
@@ -279,13 +278,11 @@ export default function LdapMapperDetails() {
             </FormGroup>
           ) : (
             <FormGroup
-              label={t("common:mapperType")}
+              label={t("mapperType")}
               labelIcon={
                 <HelpItem
                   helpText={
-                    mapper?.helpText
-                      ? mapper.helpText
-                      : t("user-federation-help:mapperTypeHelp")
+                    mapper?.helpText ? mapper.helpText : t("mapperTypeHelp")
                   }
                   fieldLabelId="mapperType"
                 />
@@ -301,17 +298,30 @@ export default function LdapMapperDetails() {
                 render={({ field }) => (
                   <Select
                     toggleId="kc-providerId"
+                    typeAheadAriaLabel={t("mapperType")}
                     required
                     onToggle={() =>
                       setIsMapperDropdownOpen(!isMapperDropdownOpen)
                     }
                     isOpen={isMapperDropdownOpen}
                     onSelect={(_, value) => {
-                      field.onChange(value as string);
+                      setupForm({
+                        providerId: value as string,
+                        ...Object.fromEntries(
+                          components
+                            .find((c) => c.id === value)
+                            ?.properties.filter((m) => m.type === "List")
+                            .map((m) => [
+                              convertToName(m.name!),
+                              m.options?.[0],
+                            ]) || [],
+                        ),
+                      });
                       setIsMapperDropdownOpen(false);
                     }}
                     selections={field.value}
                     variant={SelectVariant.typeahead}
+                    aria-label={t("selectMapperType")}
                   >
                     {components.map((c) => (
                       <SelectOption key={c.id} value={c.id} />
@@ -336,7 +346,7 @@ export default function LdapMapperDetails() {
               type="submit"
               data-testid="ldap-mapper-save"
             >
-              {t("common:save")}
+              {t("save")}
             </Button>
             <Button
               variant="link"
@@ -346,12 +356,12 @@ export default function LdapMapperDetails() {
                   : navigate(
                       `/${realm}/user-federation/ldap/${
                         mapping!.parentId
-                      }/mappers`
+                      }/mappers`,
                     )
               }
               data-testid="ldap-mapper-cancel"
             >
-              {t("common:cancel")}
+              {t("cancel")}
             </Button>
           </ActionGroup>
         </Form>

@@ -17,8 +17,9 @@
 
 package org.keycloak.testsuite.client.resources;
 
-import org.jboss.resteasy.annotations.cache.NoCache;
+import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.common.Profile;
+import org.keycloak.common.enums.HostnameVerificationPolicy;
 import org.keycloak.representations.idm.AdminEventRepresentation;
 import org.keycloak.representations.idm.AuthenticationFlowRepresentation;
 import org.keycloak.representations.idm.EventRepresentation;
@@ -27,15 +28,15 @@ import org.keycloak.testsuite.components.TestProvider;
 import org.keycloak.testsuite.rest.representation.AuthenticatorState;
 import org.keycloak.utils.MediaType;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 import java.util.Map;
@@ -83,11 +84,6 @@ public interface TestingResource {
     void clearAdminEventQueue();
 
     @GET
-    @Path("/clear-event-store")
-    @Produces(MediaType.APPLICATION_JSON)
-    void clearEventStore();
-
-    @GET
     @Path("/clear-event-store-for-realm")
     @Produces(MediaType.APPLICATION_JSON)
     void clearEventStore(@QueryParam("realmId") String realmId);
@@ -126,11 +122,6 @@ public interface TestingResource {
     @Path("/on-event")
     @Consumes(MediaType.APPLICATION_JSON)
     public void onEvent(final EventRepresentation rep);
-
-    @GET
-    @Path("/clear-admin-event-store")
-    @Produces(MediaType.APPLICATION_JSON)
-    void clearAdminEventStore();
 
     @GET
     @Path("/clear-admin-event-store-for-realm")
@@ -319,6 +310,12 @@ public interface TestingResource {
     String runOnServer(String runOnServer);
 
     @POST
+    @Path("/run-on-server")
+    @Consumes(MediaType.TEXT_PLAIN_UTF_8)
+    @Produces(MediaType.TEXT_PLAIN_UTF_8)
+    Response runOnServerWithResponse(String runOnServer);
+
+    @POST
     @Path("/run-model-test-on-server")
     @Consumes(MediaType.TEXT_PLAIN_UTF_8)
     @Produces(MediaType.TEXT_PLAIN_UTF_8)
@@ -351,6 +348,16 @@ public interface TestingResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     Set<Profile.Feature> disableFeature(@PathParam("feature") String feature);
+
+    /**
+     * Resets the given feature to it's default state.
+     *
+     * @param feature
+     */
+    @POST
+    @Path("/reset-feature/{feature}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    void resetFeature(@PathParam("feature") String feature);
 
     /**
      * If property-value is null, the system property will be unset (removed) on the server
@@ -398,4 +405,55 @@ public interface TestingResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/display-error-message")
     Response displayErrorMessage(@QueryParam("message") String message);
+
+    /**
+     * @param providerClass Full name of class such as for example "org.keycloak.authentication.Authenticator"
+     * @param providerId providerId referenced in particular provider factory. Can be null (in this case we're returning default provider for particular providerClass)
+     * @return fullname of provider implementation class
+     */
+    @GET
+    @Path("/get-provider-implementation-class")
+    @Produces(MediaType.APPLICATION_JSON)
+    String getProviderClassName(@QueryParam("providerClass") String providerClass, @QueryParam("providerId") String providerId);
+
+    /**
+     * Temporarily disables truststore SPI from the file. Useful for example to test some error scenarios, which require truststore SPI to be unset (or set incorrectly)
+     */
+    @GET
+    @Path("/disable-truststore-spi")
+    @NoCache
+    void disableTruststoreSpi();
+
+    /**
+     * Temporarily changes the truststore SPI with another hostname verification policy. Call reenableTruststoreSpi to revert.
+     * @param hostnamePolicy The hostname verification policy to set
+     */
+    @GET
+    @Path("/modify-truststore-spi-hostname-policy")
+    @NoCache
+    public void modifyTruststoreSpiHostnamePolicy(@QueryParam("hostnamePolicy") final HostnameVerificationPolicy hostnamePolicy);
+
+    /**
+     * Re-enable truststore SPI after it was temporarily disabled by {@link #disableTruststoreSpi()}
+     */
+    @GET
+    @Path("/reenable-truststore-spi")
+    @NoCache
+    void reenableTruststoreSpi();
+
+    /**
+     * Get count of tabs (child authentication sessions) for given "root authentication session"
+     *
+     * @param realm realm name (not ID)
+     * @param authSessionId ID of authentication session
+     * @return count of tabs. Return 0 if authentication session of given ID does not exists (or if it exists, but without any authenticationSessions attached, which should not happen with normal usage)
+     */
+    @GET
+    @Path("/get-authentication-session-tabs-count")
+    @NoCache
+    Integer getAuthenticationSessionTabsCount(@QueryParam("realm") String realm, @QueryParam("authSessionId") String authSessionId);
+
+    @GET
+    @Path("/no-cache-annotated-endpoint")
+    Response getNoCacheAnnotatedEndpointResponse(@QueryParam("programmatic_max_age_value") Long programmaticMaxAgeValue);
 }

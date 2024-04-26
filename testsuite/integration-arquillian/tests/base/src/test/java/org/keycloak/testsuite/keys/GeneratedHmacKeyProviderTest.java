@@ -37,7 +37,7 @@ import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.pages.LoginPage;
 import org.keycloak.testsuite.runonserver.RunHelpers;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -95,7 +95,7 @@ public class GeneratedHmacKeyProviderTest extends AbstractKeycloakTest {
         assertEquals(priority, key.getProviderPriority());
 
         ComponentRepresentation component = testingClient.server("test").fetch(RunHelpers.internalComponent(id));
-        assertEquals(64, Base64Url.decode(component.getConfig().getFirst("secret")).length);
+        assertEquals(GeneratedHmacKeyProviderFactory.DEFAULT_HMAC_KEY_SIZE, Base64Url.decode(component.getConfig().getFirst("secret")).length);
     }
 
     @Test
@@ -146,7 +146,7 @@ public class GeneratedHmacKeyProviderTest extends AbstractKeycloakTest {
         response.close();
 
         ComponentRepresentation component = testingClient.server("test").fetch(RunHelpers.internalComponent(id));
-        assertEquals(64, Base64Url.decode(component.getConfig().getFirst("secret")).length);
+        assertEquals(GeneratedHmacKeyProviderFactory.DEFAULT_HMAC_KEY_SIZE, Base64Url.decode(component.getConfig().getFirst("secret")).length);
 
         ComponentRepresentation createdRep = adminClient.realm("test").components().component(id).toRepresentation();
         createdRep.getConfig().putSingle("secretSize", "512");

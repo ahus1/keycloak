@@ -1,3 +1,4 @@
+import { v4 as uuid } from "uuid";
 import LoginPage from "../support/pages/LoginPage";
 import ListingPage, {
   Filter,
@@ -60,7 +61,7 @@ describe("Clients test", () => {
         await adminClient.createClientScope(clientScope);
         await adminClient.addDefaultClientScopeInClient(
           clientScopeName + i,
-          clientId
+          clientId,
         );
       }
       clientScope.name = clientScopeNameDefaultType;
@@ -148,9 +149,7 @@ describe("Clients test", () => {
           .checkModalTitle("Add client scopes to " + clientId);
         commonPage.tableUtils().selectRowItemCheckbox(itemName);
         commonPage.modalUtils().confirmModalWithItem(assignedType);
-        commonPage
-          .masthead()
-          .checkNotificationMessage("Scope mapping successfully updated");
+        commonPage.masthead().checkNotificationMessage("Scope mapping updated");
         commonPage.tableToolbarUtils().searchItem(itemName, false);
         commonPage
           .tableUtils()
@@ -232,6 +231,81 @@ describe("Clients test", () => {
     });
   });
 
+  describe("Client scopes evaluate subtab", () => {
+    const clientName = "testClient";
+
+    beforeEach(() => {
+      loginPage.logIn();
+      keycloakBefore();
+      commonPage.sidebar().goToClients();
+    });
+
+    before(async () => {
+      await adminClient.createClient({
+        protocol: "openid-connect",
+        clientId: clientName,
+        publicClient: false,
+      });
+    });
+
+    after(async () => {
+      await adminClient.deleteClient(clientName);
+    });
+
+    it("check effective protocol mappers list is not empty and find effective protocol mapper locale", () => {
+      commonPage.tableToolbarUtils().searchItem(clientName);
+      commonPage.tableUtils().clickRowItemLink(clientName);
+
+      clientDetailsPage.goToClientScopesEvaluateTab();
+
+      cy.findByTestId("effective-protocol-mappers")
+        .find("tr")
+        .should("have.length.gt", 0);
+    });
+
+    it("check role scope mappings list list is not empty and find role scope mapping admin", () => {
+      commonPage.tableToolbarUtils().searchItem(clientName);
+      commonPage.tableUtils().clickRowItemLink(clientName);
+
+      clientDetailsPage.goToClientScopesEvaluateTab();
+      clientDetailsPage.goToClientScopesEvaluateEffectiveRoleScopeMappingsTab();
+
+      cy.findByTestId("effective-role-scope-mappings")
+        .find("tr")
+        .should("have.length.gt", 0);
+    });
+
+    it("check generated id token and user info", () => {
+      commonPage.tableToolbarUtils().searchItem(clientName);
+      commonPage.tableUtils().clickRowItemLink(clientName);
+
+      clientDetailsPage.goToClientScopesEvaluateTab();
+      cy.get("div#generatedAccessToken").contains("No generated access token");
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedIdTokenTab();
+      cy.get("div#generatedIdToken").contains("No generated id token");
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedUserInfoTab();
+      cy.get("div#generatedUserInfo").contains("No generated user info");
+
+      cy.get("input#user-select-typeahead").type("admin");
+      cy.get("li[id*=select-option-] > button:first-child").click();
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedAccessTokenTab();
+      cy.get("div#generatedAccessToken").contains(
+        '"preferred_username": "admin"',
+      );
+      cy.get("div#generatedAccessToken").contains('"scope": "');
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedIdTokenTab();
+      cy.get("div#generatedIdToken").contains('"preferred_username": "admin"');
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedUserInfoTab();
+      cy.get("div#generatedIdToken").contains('"preferred_username": "admin"');
+      cy.get("div#generatedIdToken").contains('"session_state"');
+    });
+  });
+
   describe("Client creation", () => {
     beforeEach(() => {
       loginPage.logIn();
@@ -309,12 +383,12 @@ describe("Clients test", () => {
       commonPage
         .masthead()
         .checkNotificationMessage(
-          "Could not create client: 'Client account already exists'"
+          "Could not create client: 'Client account already exists'",
         );
     });
 
     it("Client CRUD test", () => {
-      itemId += "_" + crypto.randomUUID();
+      itemId += "_" + uuid();
 
       // Create
       commonPage.tableUtils().checkRowItemExists(itemId, false);
@@ -443,6 +517,7 @@ describe("Clients test", () => {
     });
 
     const identicalClientId = "identical";
+
     it("Should fail to create client with same ID", () => {
       commonPage.sidebar().goToClients();
       commonPage.tableToolbarUtils().createClient();
@@ -458,7 +533,7 @@ describe("Clients test", () => {
       cy.findByTestId("importClient").click();
       cy.findByTestId("realm-file").selectFile(
         "cypress/fixtures/partial-import-test-data/import-identical-client.json",
-        { action: "drag-drop" }
+        { action: "drag-drop" },
       );
 
       cy.wait(1000);
@@ -469,7 +544,7 @@ describe("Clients test", () => {
         .masthead()
         .checkNotificationMessage(
           "Could not import client: Client identical already exists",
-          true
+          true,
         );
     });
 
@@ -481,14 +556,14 @@ describe("Clients test", () => {
 
   describe("Roles tab test", () => {
     const rolesTab = new ClientRolesTab();
-    const client = "client_" + crypto.randomUUID();
+    const client = "client_" + uuid();
 
     before(() =>
       adminClient.createClient({
         clientId: client,
         protocol: "openid-connect",
         publicClient: false,
-      })
+      }),
     );
 
     beforeEach(() => {
@@ -562,7 +637,7 @@ describe("Clients test", () => {
         .masthead()
         .checkNotificationMessage(
           `Could not create role: Role with name ${itemId} already exists`,
-          true
+          true,
         );
     });
 
@@ -594,7 +669,7 @@ describe("Clients test", () => {
       // Add associated client role
       associatedRolesPage.addAssociatedRoleFromSearchBar(
         "manage-account",
-        true
+        true,
       );
       commonPage
         .masthead()
@@ -605,7 +680,7 @@ describe("Clients test", () => {
       // Add associated client role
       associatedRolesPage.addAssociatedRoleFromSearchBar(
         "manage-consent",
-        true
+        true,
       );
       commonPage
         .masthead()
@@ -687,7 +762,7 @@ describe("Clients test", () => {
       loginPage.logIn();
       keycloakBefore();
       commonPage.sidebar().goToClients();
-      client = "client_" + crypto.randomUUID();
+      client = "client_" + uuid();
       commonPage.tableToolbarUtils().createClient();
       createClientPage
         .selectClientType("openid-connect")
@@ -806,7 +881,7 @@ describe("Clients test", () => {
         authorizationServicesEnabled: true,
         serviceAccountsEnabled: true,
         standardFlowEnabled: true,
-      })
+      }),
     );
 
     beforeEach(() => {
@@ -926,6 +1001,7 @@ describe("Clients test", () => {
 
   describe("Mapping tab", () => {
     const mappingClient = "mapping-client";
+
     beforeEach(() => {
       loginPage.logIn();
       keycloakBefore();
@@ -967,7 +1043,7 @@ describe("Clients test", () => {
         protocol: "openid-connect",
         clientId: keysName,
         publicClient: false,
-      })
+      }),
     );
 
     beforeEach(() => {
@@ -990,7 +1066,7 @@ describe("Clients test", () => {
       commonPage
         .masthead()
         .checkNotificationMessage(
-          "New key pair and certificate generated successfully"
+          "New key pair and certificate generated successfully",
         );
     });
   });
@@ -1035,7 +1111,7 @@ describe("Clients test", () => {
         protocol: "openid-connect",
         publicClient: false,
         bearerOnly: true,
-      })
+      }),
     );
 
     beforeEach(() => {
@@ -1069,14 +1145,14 @@ describe("Clients test", () => {
   });
 
   describe("Accessibility tests for clients", () => {
+    const clientId = "a11y-client";
+
     beforeEach(() => {
       loginPage.logIn();
       keycloakBefore();
       commonPage.sidebar().goToClients();
       cy.injectAxe();
     });
-
-    const clientId = "a11y-client";
 
     it("Check a11y violations on load/ clients list tab", () => {
       cy.checkA11y();
@@ -1107,6 +1183,21 @@ describe("Clients test", () => {
       cy.checkA11y();
 
       clientDetailsPage.goToClientScopesTab();
+      cy.checkA11y();
+
+      clientDetailsPage.goToClientScopesEvaluateTab();
+      cy.checkA11y();
+
+      clientDetailsPage.goToClientScopesEvaluateEffectiveRoleScopeMappingsTab();
+      cy.checkA11y();
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedAccessTokenTab();
+      cy.checkA11y();
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedIdTokenTab();
+      cy.checkA11y();
+
+      clientDetailsPage.goToClientScopesEvaluateGeneratedUserInfoTab();
       cy.checkA11y();
 
       clientDetailsPage.goToAdvancedTab();

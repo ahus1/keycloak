@@ -11,29 +11,31 @@ import { useTranslation } from "react-i18next";
 import { getGroups } from "../api/methods";
 import { Group } from "../api/representations";
 import { Page } from "../components/page/Page";
+import { useEnvironment } from "../root/KeycloakContext";
 import { usePromise } from "../utils/usePromise";
 
-const Groups = () => {
+export const Groups = () => {
   const { t } = useTranslation();
+  const context = useEnvironment();
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [directMembership, setDirectMembership] = useState(false);
 
   usePromise(
-    (signal) => getGroups({ signal }),
+    (signal) => getGroups({ signal, context }),
     (groups) => {
-      if (directMembership) {
+      if (!directMembership) {
         groups.forEach((el) =>
           getParents(
             el,
             groups,
-            groups.map(({ path }) => path)
-          )
+            groups.map(({ path }) => path),
+          ),
         );
       }
       setGroups(groups);
     },
-    [directMembership]
+    [directMembership],
   );
 
   const getParents = (el: Group, groups: Group[], groupsPaths: string[]) => {
@@ -51,9 +53,12 @@ const Groups = () => {
   };
 
   return (
-    <Page title={t("groupLabel")} description={t("groupDescriptionLabel")}>
-      <DataList id="groups-list" aria-label={t("groupLabel")} isCompact>
-        <DataListItem id="groups-list-header" aria-labelledby="Columns names">
+    <Page title={t("groups")} description={t("groupDescriptionLabel")}>
+      <DataList id="groups-list" aria-label={t("groups")} isCompact>
+        <DataListItem
+          id="groups-list-header"
+          aria-label={t("groupsListHeader")}
+        >
           <DataListItemRow>
             <DataListItemCells
               dataListCells={[
@@ -61,6 +66,7 @@ const Groups = () => {
                   <Checkbox
                     label={t("directMembership")}
                     id="directMembership-checkbox"
+                    data-testid="directMembership-checkbox"
                     isChecked={directMembership}
                     onChange={(checked) => setDirectMembership(checked)}
                   />
@@ -69,7 +75,10 @@ const Groups = () => {
             />
           </DataListItemRow>
         </DataListItem>
-        <DataListItem id="groups-list-header" aria-labelledby="Columns names">
+        <DataListItem
+          id="groups-list-columns-names"
+          aria-label={t("groupsListColumnsNames")}
+        >
           <DataListItemRow>
             <DataListItemCells
               dataListCells={[
@@ -96,7 +105,7 @@ const Groups = () => {
               <DataListItemCells
                 dataListCells={[
                   <DataListCell
-                    id={`${appIndex}-group-name`}
+                    data-testid={`group[${appIndex}].name`}
                     width={2}
                     key={"name-" + appIndex}
                   >

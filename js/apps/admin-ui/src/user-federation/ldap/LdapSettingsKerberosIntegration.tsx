@@ -1,9 +1,8 @@
-// @ts-nocheck
 import { FormGroup, Switch } from "@patternfly/react-core";
 import { Controller, UseFormReturn, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { FormAccess } from "../../components/form-access/FormAccess";
+import { FormAccess } from "../../components/form/FormAccess";
 import { HelpItem } from "ui-shared";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { WizardSectionHeader } from "../../components/wizard-section-header/WizardSectionHeader";
@@ -19,8 +18,7 @@ export const LdapSettingsKerberosIntegration = ({
   showSectionHeading = false,
   showSectionDescription = false,
 }: LdapSettingsKerberosIntegrationProps) => {
-  const { t } = useTranslation("user-federation");
-  const { t: helpText } = useTranslation("user-federation-help");
+  const { t } = useTranslation();
 
   const allowKerberosAuth: [string] = useWatch({
     control: form.control,
@@ -33,7 +31,7 @@ export const LdapSettingsKerberosIntegration = ({
       {showSectionHeading && (
         <WizardSectionHeader
           title={t("kerberosIntegration")}
-          description={helpText("ldapKerberosSettingsDescription")}
+          description={t("ldapKerberosSettingsDescription")}
           showDescription={showSectionDescription}
         />
       )}
@@ -43,10 +41,8 @@ export const LdapSettingsKerberosIntegration = ({
           label={t("allowKerberosAuthentication")}
           labelIcon={
             <HelpItem
-              helpText={t(
-                "user-federation-help:allowKerberosAuthenticationHelp"
-              )}
-              fieldLabelId="user-federation:allowKerberosAuthentication"
+              helpText={t("allowKerberosAuthenticationHelp")}
+              fieldLabelId="allowKerberosAuthentication"
             />
           }
           fieldId="kc-allow-kerberos-authentication"
@@ -63,8 +59,8 @@ export const LdapSettingsKerberosIntegration = ({
                 isDisabled={false}
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("allowKerberosAuthentication")}
               />
             )}
@@ -77,19 +73,20 @@ export const LdapSettingsKerberosIntegration = ({
               label={t("kerberosRealm")}
               labelIcon={
                 <HelpItem
-                  helpText={t("user-federation-help:kerberosRealmHelp")}
-                  fieldLabelId="user-federation:kerberosRealm"
+                  helpText={t("kerberosRealmHelp")}
+                  fieldLabelId="kerberosRealm"
                 />
               }
               fieldId="kc-kerberos-realm"
               isRequired
               validated={
-                form.formState.errors.config?.kerberosRealm?.[0]
+                (form.formState.errors.config as any)?.kerberosRealm?.[0]
                   ? "error"
                   : "default"
               }
               helperTextInvalid={
-                form.formState.errors.config?.kerberosRealm?.[0].message
+                (form.formState.errors.config as any)?.kerberosRealm?.[0]
+                  .message
               }
             >
               <KeycloakTextInput
@@ -97,7 +94,7 @@ export const LdapSettingsKerberosIntegration = ({
                 id="kc-kerberos-realm"
                 data-testid="kerberos-realm"
                 validated={
-                  form.formState.errors.config?.kerberosRealm?.[0]
+                  (form.formState.errors.config as any)?.kerberosRealm?.[0]
                     ? "error"
                     : "default"
                 }
@@ -114,19 +111,20 @@ export const LdapSettingsKerberosIntegration = ({
               label={t("serverPrincipal")}
               labelIcon={
                 <HelpItem
-                  helpText={t("user-federation-help:serverPrincipalHelp")}
-                  fieldLabelId="user-federation:serverPrincipal"
+                  helpText={t("serverPrincipalHelp")}
+                  fieldLabelId="serverPrincipal"
                 />
               }
               fieldId="kc-server-principal"
               isRequired
               validated={
-                form.formState.errors.config?.serverPrincipal?.[0]
+                (form.formState.errors.config as any)?.serverPrincipal?.[0]
                   ? "error"
                   : "default"
               }
               helperTextInvalid={
-                form.formState.errors.config?.serverPrincipal?.[0].message
+                (form.formState.errors.config as any)?.serverPrincipal?.[0]
+                  .message
               }
             >
               <KeycloakTextInput
@@ -134,7 +132,7 @@ export const LdapSettingsKerberosIntegration = ({
                 id="kc-server-principal"
                 data-testid="kerberos-principal"
                 validated={
-                  form.formState.errors.config?.serverPrincipal?.[0]
+                  (form.formState.errors.config as any)?.serverPrincipal?.[0]
                     ? "error"
                     : "default"
                 }
@@ -150,18 +148,17 @@ export const LdapSettingsKerberosIntegration = ({
             <FormGroup
               label={t("keyTab")}
               labelIcon={
-                <HelpItem
-                  helpText={t("user-federation-help:keyTabHelp")}
-                  fieldLabelId="user-federation:keyTab"
-                />
+                <HelpItem helpText={t("keyTabHelp")} fieldLabelId="keyTab" />
               }
               fieldId="kc-key-tab"
               isRequired
               validated={
-                form.formState.errors.config?.keyTab?.[0] ? "error" : "default"
+                (form.formState.errors.config as any)?.keyTab?.[0]
+                  ? "error"
+                  : "default"
               }
               helperTextInvalid={
-                form.formState.errors.config?.keyTab?.[0].message
+                (form.formState.errors.config as any)?.keyTab?.[0].message
               }
             >
               <KeycloakTextInput
@@ -169,7 +166,7 @@ export const LdapSettingsKerberosIntegration = ({
                 id="kc-key-tab"
                 data-testid="kerberos-keytab"
                 validated={
-                  form.formState.errors.config?.keyTab?.[0]
+                  (form.formState.errors.config as any)?.keyTab?.[0]
                     ? "error"
                     : "default"
                 }
@@ -183,12 +180,42 @@ export const LdapSettingsKerberosIntegration = ({
             </FormGroup>
 
             <FormGroup
-              label={t("debug")}
+              label={t("krbPrincipalAttribute")}
               labelIcon={
                 <HelpItem
-                  helpText={t("user-federation-help:debugHelp")}
-                  fieldLabelId="user-federation:debug"
+                  helpText={t("krbPrincipalAttributeHelp")}
+                  fieldLabelId="krbPrincipalAttribute"
                 />
+              }
+              fieldId="kc-krb-principal-attribute"
+              validated={
+                (form.formState.errors.config as any)
+                  ?.krbPrincipalAttribute?.[0]
+                  ? "error"
+                  : "default"
+              }
+              helperTextInvalid={
+                (form.formState.errors.config as any)
+                  ?.krbPrincipalAttribute?.[0].message
+              }
+            >
+              <KeycloakTextInput
+                id="kc-krb-principal-attribute"
+                data-testid="krb-principal-attribute"
+                validated={
+                  (form.formState.errors.config as any)
+                    ?.krbPrincipalAttribute?.[0]
+                    ? "error"
+                    : "default"
+                }
+                {...form.register("config.krbPrincipalAttribute.0")}
+              />
+            </FormGroup>
+
+            <FormGroup
+              label={t("debug")}
+              labelIcon={
+                <HelpItem helpText={t("debugHelp")} fieldLabelId="debug" />
               }
               fieldId="kc-debug"
               hasNoPaddingTop
@@ -205,8 +232,8 @@ export const LdapSettingsKerberosIntegration = ({
                     isDisabled={false}
                     onChange={(value) => field.onChange([`${value}`])}
                     isChecked={field.value[0] === "true"}
-                    label={t("common:on")}
-                    labelOff={t("common:off")}
+                    label={t("on")}
+                    labelOff={t("off")}
                     aria-label={t("debug")}
                   />
                 )}
@@ -218,10 +245,8 @@ export const LdapSettingsKerberosIntegration = ({
           label={t("useKerberosForPasswordAuthentication")}
           labelIcon={
             <HelpItem
-              helpText={t(
-                "user-federation-help:useKerberosForPasswordAuthenticationHelp"
-              )}
-              fieldLabelId="user-federation:useKerberosForPasswordAuthentication"
+              helpText={t("useKerberosForPasswordAuthenticationHelp")}
+              fieldLabelId="useKerberosForPasswordAuthentication"
             />
           }
           fieldId="kc-use-kerberos-password-authentication"
@@ -238,8 +263,8 @@ export const LdapSettingsKerberosIntegration = ({
                 isDisabled={false}
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("useKerberosForPasswordAuthentication")}
               />
             )}

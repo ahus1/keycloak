@@ -1,7 +1,8 @@
-import type UserProfileConfig from "@keycloak/keycloak-admin-client/lib/defs/userProfileConfig";
-import type { UserProfileAttribute } from "@keycloak/keycloak-admin-client/lib/defs/userProfileConfig";
+import type {
+  UserProfileAttribute,
+  UserProfileConfig,
+} from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 import {
-  ActionGroup,
   AlertVariant,
   Button,
   Form,
@@ -12,20 +13,21 @@ import { useState } from "react";
 import { FormProvider, useForm, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-
+import { ScrollForm } from "ui-shared";
+import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
-import { ScrollForm } from "../components/scroll-form/ScrollForm";
+import { FixedButtonsGroup } from "../components/form/FixedButtonGroup";
 import { ViewHeader } from "../components/view-header/ViewHeader";
-import { useAdminClient, useFetch } from "../context/auth/AdminClient";
 import { convertToFormValues } from "../util";
+import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import type { AttributeParams } from "./routes/Attribute";
 import { toUserProfile } from "./routes/UserProfile";
+import { UserProfileProvider } from "./user-profile/UserProfileContext";
 import { AttributeAnnotations } from "./user-profile/attribute/AttributeAnnotations";
 import { AttributeGeneralSettings } from "./user-profile/attribute/AttributeGeneralSettings";
 import { AttributePermission } from "./user-profile/attribute/AttributePermission";
 import { AttributeValidations } from "./user-profile/attribute/AttributeValidations";
-import { UserProfileProvider } from "./user-profile/UserProfileContext";
 
 import "./realm-settings-section.css";
 
@@ -39,7 +41,7 @@ export type IndexedValidations = {
   value?: Record<string, unknown>;
 };
 
-type UserProfileAttributeType = Omit<
+type UserProfileAttributeFormFields = Omit<
   UserProfileAttribute,
   "validations" | "annotations"
 > &
@@ -47,6 +49,8 @@ type UserProfileAttributeType = Omit<
   Permission & {
     validations: IndexedValidations[];
     annotations: IndexedAnnotations[];
+    hasSelector: boolean;
+    hasRequiredScopes: boolean;
   };
 
 type Attribute = {
@@ -64,14 +68,14 @@ type PermissionView = [
   {
     adminView: boolean;
     userView: boolean;
-  }
+  },
 ];
 
 type PermissionEdit = [
   {
     adminEdit: boolean;
     userEdit: boolean;
-  }
+  },
 ];
 
 export const USERNAME_EMAIL = ["username", "email"];
@@ -81,7 +85,7 @@ const CreateAttributeFormContent = ({
 }: {
   save: (profileConfig: UserProfileConfig) => void;
 }) => {
-  const { t } = useTranslation("realm-settings");
+  const { t } = useTranslation();
   const form = useFormContext();
   const { realm, attributeName } = useParams<AttributeParams>();
   const editMode = attributeName ? true : false;
@@ -89,6 +93,7 @@ const CreateAttributeFormContent = ({
   return (
     <UserProfileProvider>
       <ScrollForm
+        label={t("jumpToSection")}
         sections={[
           { title: t("generalSettings"), panel: <AttributeGeneralSettings /> },
           { title: t("permission"), panel: <AttributePermission /> },
@@ -97,22 +102,22 @@ const CreateAttributeFormContent = ({
         ]}
       />
       <Form onSubmit={form.handleSubmit(save)}>
-        <ActionGroup className="keycloak__form_actions">
+        <FixedButtonsGroup name="attribute-settings">
           <Button
             variant="primary"
             type="submit"
             data-testid="attribute-create"
           >
-            {editMode ? t("common:save") : t("common:create")}
+            {editMode ? t("save") : t("create")}
           </Button>
           <Link
             to={toUserProfile({ realm, tab: "attributes" })}
             data-testid="attribute-cancel"
             className="kc-attributeCancel"
           >
-            {t("common:cancel")}
+            {t("cancel")}
           </Link>
-        </ActionGroup>
+        </FixedButtonsGroup>
       </Form>
     </UserProfileProvider>
   );
@@ -120,9 +125,8 @@ const CreateAttributeFormContent = ({
 
 export default function NewAttributeSettings() {
   const { realm, attributeName } = useParams<AttributeParams>();
-  const { adminClient } = useAdminClient();
-  const form = useForm<UserProfileAttributeType>();
-  const { t } = useTranslation("realm-settings");
+  const form = useForm<UserProfileAttributeFormFields>();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { addAlert, addError } = useAlerts();
   const [config, setConfig] = useState<UserProfileConfig | null>(null);
@@ -138,49 +142,67 @@ export default function NewAttributeSettings() {
         permissions,
         selector,
         required,
+        multivalued,
         ...values
-      } =
-        config.attributes!.find(
-          (attribute) => attribute.name === attributeName
-        ) || {};
-      convertToFormValues(values, form.setValue);
+      } = config.attributes!.find(
+        (attribute) => attribute.name === attributeName,
+      ) || { permissions: { edit: ["admin"] } };
+      convertToFormValues(
+        {
+          ...values,
+          hasSelector: typeof selector !== "undefined",
+          hasRequiredScopes: typeof required?.scopes !== "undefined",
+        },
+        form.setValue,
+      );
       Object.entries(
-        flatten<any, any>({ permissions, selector, required }, { safe: true })
+        flatten<any, any>({ permissions, selector, required }, { safe: true }),
       ).map(([key, value]) => form.setValue(key as any, value));
       form.setValue(
         "annotations",
         Object.entries(annotations || {}).map(([key, value]) => ({
           key,
-          value,
-        }))
+          value: value as Record<string, unknown>,
+        })),
       );
       form.setValue(
         "validations",
         Object.entries(validations || {}).map(([key, value]) => ({
           key,
-          value,
-        }))
+          value: value as Record<string, unknown>,
+        })),
       );
       form.setValue("isRequired", required !== undefined);
+      form.setValue("multivalued", multivalued === true);
     },
-    []
+    [],
   );
 
-  const save = async (profileConfig: UserProfileAttributeType) => {
-    const validations = profileConfig.validations.reduce(
+  const save = async ({
+    hasSelector,
+    hasRequiredScopes,
+    ...formFields
+  }: UserProfileAttributeFormFields) => {
+    if (!hasSelector) {
+      delete formFields.selector;
+    }
+
+    if (!hasRequiredScopes) {
+      delete formFields.required?.scopes;
+    }
+
+    const validations = formFields.validations.reduce(
       (prevValidations, currentValidations) => {
         prevValidations[currentValidations.key] =
-          currentValidations.value?.length === 0
-            ? {}
-            : currentValidations.value;
+          currentValidations.value || {};
         return prevValidations;
       },
-      {} as Record<string, unknown>
+      {} as Record<string, unknown>,
     );
 
-    const annotations = profileConfig.annotations.reduce(
+    const annotations = formFields.annotations.reduce(
       (obj, item) => Object.assign(obj, { [item.key]: item.value }),
-      {}
+      {},
     );
 
     const patchAttributes = () =>
@@ -194,16 +216,15 @@ export default function NewAttributeSettings() {
           {
             ...attribute,
             name: attributeName,
-            displayName: profileConfig.displayName!,
-            selector: profileConfig.selector,
-            permissions: profileConfig.permissions!,
+            displayName: formFields.displayName!,
+            selector: formFields.selector,
+            permissions: formFields.permissions!,
+            multivalued: formFields.multivalued,
             annotations,
             validations,
           },
-          profileConfig.isRequired
-            ? { required: profileConfig.required }
-            : undefined,
-          profileConfig.group ? { group: profileConfig.group } : { group: null }
+          formFields.isRequired ? { required: formFields.required } : undefined,
+          formFields.group ? { group: formFields.group } : { group: null },
         );
       });
 
@@ -211,18 +232,17 @@ export default function NewAttributeSettings() {
       config?.attributes!.concat([
         Object.assign(
           {
-            name: profileConfig.name,
-            displayName: profileConfig.displayName!,
-            required: profileConfig.isRequired ? profileConfig.required : {},
-            selector: profileConfig.selector,
-            permissions: profileConfig.permissions!,
+            name: formFields.name,
+            displayName: formFields.displayName!,
+            required: formFields.isRequired ? formFields.required : undefined,
+            selector: formFields.selector,
+            permissions: formFields.permissions!,
+            multivalued: formFields.multivalued,
             annotations,
             validations,
           },
-          profileConfig.isRequired
-            ? { required: profileConfig.required }
-            : undefined,
-          profileConfig.group ? { group: profileConfig.group } : undefined
+          formFields.isRequired ? { required: formFields.required } : undefined,
+          formFields.group ? { group: formFields.group } : undefined,
         ),
       ] as UserProfileAttribute);
 
@@ -237,12 +257,9 @@ export default function NewAttributeSettings() {
 
       navigate(toUserProfile({ realm, tab: "attributes" }));
 
-      addAlert(
-        t("realm-settings:createAttributeSuccess"),
-        AlertVariant.success
-      );
+      addAlert(t("createAttributeSuccess"), AlertVariant.success);
     } catch (error) {
-      addError("realm-settings:createAttributeError", error);
+      addError("createAttributeError", error);
     }
   };
 

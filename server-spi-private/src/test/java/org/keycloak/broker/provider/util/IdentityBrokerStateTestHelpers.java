@@ -68,21 +68,6 @@ public class IdentityBrokerStateTestHelpers {
         }
 
         @Override
-        public Stream<String> getDefaultRolesStream() {
-            return null;
-        }
-
-        @Override
-        public void addDefaultRole(String name) {
-
-        }
-
-        @Override
-        public void removeDefaultRoles(String... defaultRoles) {
-
-        }
-
-        @Override
         public String getClientId() {
             return clientId;
         }
@@ -554,21 +539,6 @@ public class IdentityBrokerStateTestHelpers {
         }
 
         @Override
-        public Stream<String> getDefaultRolesStream() {
-            return null;
-        }
-
-        @Override
-        public void addDefaultRole(String name) {
-
-        }
-
-        @Override
-        public void removeDefaultRoles(String... defaultRoles) {
-
-        }
-
-        @Override
         public String getName() {
             return null;
         }
@@ -705,6 +675,16 @@ public class IdentityBrokerStateTestHelpers {
 
         @Override
         public void setPermanentLockout(boolean val) {
+
+        }
+
+        @Override
+        public int getMaxTemporaryLockouts() {
+            return 0;
+        }
+
+        @Override
+        public void setMaxTemporaryLockouts(int val) {
 
         }
 
@@ -1174,6 +1154,12 @@ public class IdentityBrokerStateTestHelpers {
         }
 
         @Override
+        public Stream<ClientModel> searchClientByAuthenticationFlowBindingOverrides(Map<String, String> overrides, Integer firstResult, Integer maxResults) {
+            return null;
+        }
+
+
+        @Override
         public void updateRequiredCredentials(Set<String> creds) {
 
         }
@@ -1255,6 +1241,16 @@ public class IdentityBrokerStateTestHelpers {
 
         @Override
         public void setDockerAuthenticationFlow(AuthenticationFlowModel flow) {
+
+        }
+
+        @Override
+        public AuthenticationFlowModel getFirstBrokerLoginFlow() {
+            return null;
+        }
+
+        @Override
+        public void setFirstBrokerLoginFlow(AuthenticationFlowModel flow) {
 
         }
 
@@ -1680,11 +1676,6 @@ public class IdentityBrokerStateTestHelpers {
 
         @Override
         public Stream<GroupModel> getTopLevelGroupsStream(Integer first, Integer max) {
-            return null;
-        }
-
-        @Override
-        public Stream<GroupModel> searchForGroupByNameStream(String search, Integer first, Integer max) {
             return null;
         }
 

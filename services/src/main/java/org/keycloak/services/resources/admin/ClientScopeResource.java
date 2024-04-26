@@ -16,8 +16,11 @@
  */
 package org.keycloak.services.resources.admin;
 
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.jboss.logging.Logger;
-import org.jboss.resteasy.annotations.cache.NoCache;
+import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.common.Profile;
 import org.keycloak.events.admin.OperationType;
 import org.keycloak.events.admin.ResourceType;
@@ -32,17 +35,19 @@ import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.saml.common.util.StringUtil;
 import org.keycloak.services.ErrorResponse;
 import org.keycloak.services.ErrorResponseException;
+import org.keycloak.services.resources.KeycloakOpenAPI;
 import org.keycloak.services.resources.admin.permissions.AdminPermissionEvaluator;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -54,6 +59,7 @@ import java.util.regex.Pattern;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
+@Extension(name = KeycloakOpenAPI.Profiles.ADMIN, value = "")
 public class ClientScopeResource {
     protected static final Logger logger = Logger.getLogger(ClientScopeResource.class);
     protected RealmModel realm;
@@ -99,6 +105,8 @@ public class ClientScopeResource {
      */
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
+    @Tag(name = KeycloakOpenAPI.Admin.Tags.CLIENT_SCOPES)
+    @Operation(summary = "Update the client scope")
     public Response update(final ClientScopeRepresentation rep) {
         auth.clients().requireManageClientScopes();
         validateDynamicScopeUpdate(rep);
@@ -124,6 +132,8 @@ public class ClientScopeResource {
     @GET
     @NoCache
     @Produces(MediaType.APPLICATION_JSON)
+    @Tag(name = KeycloakOpenAPI.Admin.Tags.CLIENT_SCOPES)
+    @Operation(summary = "Get representation of the client scope")
     public ClientScopeRepresentation getClientScope() {
         auth.clients().requireView(clientScope);
 
@@ -136,15 +146,22 @@ public class ClientScopeResource {
      */
     @DELETE
     @NoCache
+    @Tag(name = KeycloakOpenAPI.Admin.Tags.CLIENT_SCOPES)
+    @Operation(summary = "Delete the client scope")
     public Response deleteClientScope() {
-        auth.clients().requireManage(clientScope);
 
-        try {
-            realm.removeClientScope(clientScope.getId());
-            adminEvent.operation(OperationType.DELETE).resourcePath(session.getContext().getUri()).success();
-            return Response.noContent().build();
-        } catch (ModelException me) {
-            throw ErrorResponse.error(me.getMessage(), Response.Status.BAD_REQUEST);
+        auth.clients().requireManage(clientScope);
+        long clientScopesCount =  Arrays.stream(realm.getClientScopesStream().toArray()).count();
+        if (clientScopesCount > 1) {
+            try {
+                realm.removeClientScope(clientScope.getId());
+                adminEvent.operation(OperationType.DELETE).resourcePath(session.getContext().getUri()).success();
+                return Response.noContent().build();
+            } catch (ModelException me) {
+                throw ErrorResponse.error(me.getMessage(), Response.Status.BAD_REQUEST);
+            }
+        } else {
+            throw ErrorResponse.error("You are not allowed to delete all the client scopes.", Response.Status.FORBIDDEN);
         }
     }
 

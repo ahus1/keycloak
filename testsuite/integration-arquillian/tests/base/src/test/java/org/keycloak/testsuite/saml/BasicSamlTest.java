@@ -26,13 +26,14 @@ import org.keycloak.testsuite.util.SamlClientBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.security.Signature;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-import javax.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
+import jakarta.ws.rs.core.UriBuilder;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -49,6 +50,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.matchesRegex;
 import static org.keycloak.saml.common.constants.JBossSAMLURIConstants.NAMEID_FORMAT_TRANSIENT;
@@ -325,6 +327,47 @@ public class BasicSamlTest extends AbstractSamlTest {
 
             // Corresponds to https://www.w3.org/TR/xmlschema-2/#base64Binary
             assertThat(signature, matchesRegex("^[A-Za-z0-9+/ ]+[= ]*$"));
+        }
+    }
+
+    @Test
+    public void testInvalidAssertionConsumerServiceURL() throws IOException {
+        try (var c = ClientAttributeUpdater.forClient(adminClient, REALM_NAME, SAML_CLIENT_ID_SALES_POST)
+                .setRedirectUris(Collections.singletonList("*"))
+                .update()) {
+
+            String page = new SamlClientBuilder()
+                    .authnRequest(getAuthServerSamlEndpoint(REALM_NAME), SAML_CLIENT_ID_SALES_POST, "javascript:alert('XSS')", Binding.POST)
+                    .build()
+                    .executeAndTransform(response -> {
+                        assertThat(response, statusCodeIsHC(Status.BAD_REQUEST));
+                        return EntityUtils.toString(response.getEntity(), "UTF-8");
+                    });
+            assertThat(page, containsString("Invalid redirect uri"));
+        }
+    }
+
+    @Test
+    public void testConsumerServiceURLHtmlEntities() throws IOException {
+        try (var c = ClientAttributeUpdater.forClient(adminClient, REALM_NAME, SAML_CLIENT_ID_SALES_POST)
+                .setRedirectUris(Collections.singletonList("*"))
+                .update()) {
+
+            String action = new SamlClientBuilder()
+                    .authnRequest(getAuthServerSamlEndpoint(REALM_NAME), SAML_CLIENT_ID_SALES_POST, "javascript&colon;alert('xss');", Binding.POST)
+                    .build()
+                    .login().user(bburkeUser).build()
+                    .executeAndTransform(response -> {
+                        assertThat(response, statusCodeIsHC(Response.Status.OK));
+                        String responsePage = EntityUtils.toString(response.getEntity(), "UTF-8");
+                        return SamlClient.extractFormFromPostResponse(responsePage)
+                                .attributes().asList().stream()
+                                .filter(a -> "action".equalsIgnoreCase(a.getKey()))
+                                .map(org.jsoup.nodes.Attribute::getValue)
+                                .findAny().orElse(null);
+                    });
+            // if not encoded properly jsoup returns ":" instead of "&colon;"
+            assertThat(action, endsWith("javascript&colon;alert('xss');"));
         }
     }
 }

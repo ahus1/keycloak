@@ -41,7 +41,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import javax.xml.bind.JAXBException;
+import jakarta.xml.bind.JAXBException;
 import javax.xml.crypto.XMLStructure;
 import javax.xml.crypto.MarshalException;
 import javax.xml.crypto.dsig.CanonicalizationMethod;
@@ -88,6 +88,7 @@ import javax.xml.crypto.KeySelector;
 import javax.xml.crypto.KeySelectorException;
 import javax.xml.crypto.KeySelectorResult;
 import javax.xml.crypto.XMLCryptoContext;
+import javax.xml.crypto.dom.DOMStructure;
 import org.keycloak.rotation.KeyLocator;
 import org.keycloak.saml.common.util.SecurityActions;
 
@@ -728,5 +729,10 @@ public class XMLSignatureUtil {
         }
 
         return keyInfoFactory.newKeyInfo(items);
+    }
+
+    public static KeyInfo createKeyInfo(Element keyInfo) throws MarshalException {
+        KeyInfoFactory keyInfoFactory = fac.getKeyInfoFactory();
+        return keyInfoFactory.unmarshalKeyInfo(new DOMStructure(keyInfo));
     }
 }

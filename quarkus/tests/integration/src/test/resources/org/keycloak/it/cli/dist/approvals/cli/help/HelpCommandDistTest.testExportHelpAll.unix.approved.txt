@@ -12,69 +12,7 @@ Options:
 --help-all           This same help message but with additional options.
 --optimized          Use this option to achieve an optimal startup time if you have previously
                        built a server image using the 'build' command.
-
-Storage (Experimental):
-
---storage <type>     Experimental: Sets the default storage mechanism for all areas. Possible
-                       values are: jpa, chm, hotrod, file.
---storage-area-auth-session <type>
-                     Experimental: Sets a storage mechanism for authentication sessions. Possible
-                       values are: jpa, chm, hotrod, file.
---storage-area-authorization <type>
-                     Experimental: Sets a storage mechanism for authorizations. Possible values
-                       are: jpa, chm, hotrod, file.
---storage-area-client <type>
-                     Experimental: Sets a storage mechanism for clients. Possible values are: jpa,
-                       chm, hotrod, file.
---storage-area-client-scope <type>
-                     Experimental: Sets a storage mechanism for client scopes. Possible values are:
-                       jpa, chm, hotrod, file.
---storage-area-event-admin <type>
-                     Experimental: Sets a storage mechanism for admin events. Possible values are:
-                       jpa, chm, hotrod, file.
---storage-area-event-auth <type>
-                     Experimental: Sets a storage mechanism for authentication and authorization
-                       events. Possible values are: jpa, chm, hotrod, file.
---storage-area-group <type>
-                     Experimental: Sets a storage mechanism for groups. Possible values are: jpa,
-                       chm, hotrod, file.
---storage-area-login-failure <type>
-                     Experimental: Sets a storage mechanism for login failures. Possible values
-                       are: jpa, chm, hotrod, file.
---storage-area-realm <type>
-                     Experimental: Sets a storage mechanism for realms. Possible values are: jpa,
-                       chm, hotrod, file.
---storage-area-role <type>
-                     Experimental: Sets a storage mechanism for roles. Possible values are: jpa,
-                       chm, hotrod, file.
---storage-area-single-use-object <type>
-                     Experimental: Sets a storage mechanism for single use objects. Possible values
-                       are: jpa, chm, hotrod.
---storage-area-user <type>
-                     Experimental: Sets a storage mechanism for users. Possible values are: jpa,
-                       chm, hotrod, file.
---storage-area-user-session <type>
-                     Experimental: Sets a storage mechanism for user and client sessions. Possible
-                       values are: jpa, chm, hotrod, file.
---storage-deployment-state-version-seed <type>
-                     Experimental: Secret that serves as a seed to mask the version number of
-                       Keycloak in URLs. Need to be identical across all servers in the cluster.
-                       Will default to a random number generated when starting the server which is
-                       secure but will lead to problems when a loadbalancer without sticky sessions
-                       is used or nodes are restarted.
---storage-file-dir <dir>
-                     Experimental: Root directory for file map store.
---storage-hotrod-host <host>
-                     Experimental: Sets the host of the Infinispan server.
---storage-hotrod-password <password>
-                     Experimental: Sets the password of the Infinispan user.
---storage-hotrod-port <port>
-                     Experimental: Sets the port of the Infinispan server.
---storage-hotrod-username <username>
-                     Experimental: Sets the username of the Infinispan user.
---storage-jpa-db <type>
-                     Experimental: The database vendor for jpa map storage. Possible values are:
-                       postgres, cockroach. Default: postgres.
+-v, --verbose        Print out error details when running this command.
 
 Database:
 
@@ -103,8 +41,10 @@ Database:
 --db-url-port <port> Sets the port of the default JDBC URL of the chosen vendor. If the `db-url`
                        option is set, this option is ignored.
 --db-url-properties <properties>
-                     Sets the properties of the default JDBC URL of the chosen vendor. If the
-                       `db-url` option is set, this option is ignored.
+                     Sets the properties of the default JDBC URL of the chosen vendor. Make sure to
+                       set the properties accordingly to the format expected by the database
+                       vendor, as well as appending the right character at the beginning of this
+                       property value. If the `db-url` option is set, this option is ignored.
 --db-username <username>
                      The username of the database user.
 
@@ -116,26 +56,39 @@ Transaction:
 
 Feature:
 
---features <feature> Enables a set of one or more features. Possible values are: account-api,
-                       account2, account3, admin-api, admin-fine-grained-authz, admin2,
-                       authorization, ciba, client-policies, client-secret-rotation,
-                       declarative-user-profile, docker, dynamic-scopes, fips, impersonation,
-                       js-adapter, kerberos, map-storage, openshift-integration, par, preview,
-                       recovery-codes, scripts, step-up-authentication, token-exchange,
-                       update-email, web-authn.
+--features <feature> Enables a set of one or more features. Possible values are: account-api[:v1],
+                       account2[:v1], account3[:v1], admin-api[:v1], admin-fine-grained-authz[:v1],
+                       admin2[:v1], authorization[:v1], ciba[:v1], client-policies[:v1],
+                       client-secret-rotation[:v1], client-types[:v1], declarative-ui[:v1],
+                       device-flow[:v1], docker[:v1], dpop[:v1], dynamic-scopes[:v1], fips[:v1],
+                       hostname[:v1], impersonation[:v1], js-adapter[:v1], kerberos[:v1],
+                       linkedin-oauth[:v1], login2[:v1], multi-site[:v1], offline-session-preloading
+                       [:v1], oid4vc-vci[:v1], par[:v1], preview, recovery-codes[:v1], scripts[:
+                       v1], step-up-authentication[:v1], token-exchange[:v1], transient-users[:v1],
+                       update-email[:v1], web-authn[:v1].
 --features-disabled <feature>
                      Disables a set of one or more features. Possible values are: account-api,
                        account2, account3, admin-api, admin-fine-grained-authz, admin2,
-                       authorization, ciba, client-policies, client-secret-rotation,
-                       declarative-user-profile, docker, dynamic-scopes, fips, impersonation,
-                       js-adapter, kerberos, map-storage, openshift-integration, par, preview,
-                       recovery-codes, scripts, step-up-authentication, token-exchange,
+                       authorization, ciba, client-policies, client-secret-rotation, client-types,
+                       declarative-ui, device-flow, docker, dpop, dynamic-scopes, fips,
+                       impersonation, js-adapter, kerberos, linkedin-oauth, login2, multi-site,
+                       offline-session-preloading, oid4vc-vci, par, preview, recovery-codes,
+                       scripts, step-up-authentication, token-exchange, transient-users,
                        update-email, web-authn.
+
+Config:
+
+--config-keystore <config-keystore>
+                     Specifies a path to the KeyStore Configuration Source.
+--config-keystore-password <config-keystore-password>
+                     Specifies a password to the KeyStore Configuration Source.
+--config-keystore-type <config-keystore-type>
+                     Specifies a type of the KeyStore Configuration Source. Default: PKCS12.
 
 Logging:
 
 --log <handler>      Enable one or more log handlers in a comma-separated list. Possible values
-                       are: console, file, gelf. Default: console.
+                       are: console, file, gelf (deprecated). Default: console.
 --log-console-color <true|false>
                      Enable or disable colors when logging to console. Default: false.
 --log-console-format <format>
@@ -153,43 +106,55 @@ Logging:
                      Set the log output to JSON or default (plain) unstructured logging. Possible
                        values are: default, json. Default: default.
 --log-gelf-facility <name>
-                     The facility (name of the process) that sends the message. Default: keycloak.
+                     DEPRECATED. The facility (name of the process) that sends the message.
+                       Default: keycloak.
 --log-gelf-host <hostname>
-                     Hostname of the Logstash or Graylog Host. By default UDP is used, prefix the
-                       host with 'tcp:' to switch to TCP. Example: 'tcp:localhost' Default:
-                       localhost.
+                     DEPRECATED. Hostname of the Logstash or Graylog Host. By default UDP is used,
+                       prefix the host with 'tcp:' to switch to TCP. Example: 'tcp:localhost'
+                       Default: localhost.
 --log-gelf-include-location <true|false>
-                     Include source code location. Default: true.
+                     DEPRECATED. Include source code location. Default: true.
 --log-gelf-include-message-parameters <true|false>
-                     Include message parameters from the log event. Default: true.
+                     DEPRECATED. Include message parameters from the log event. Default: true.
 --log-gelf-include-stack-trace <true|false>
-                     If set to true, occuring stack traces are included in the 'StackTrace' field
-                       in the GELF output. Default: true.
+                     DEPRECATED. If set to true, occuring stack traces are included in the
+                       'StackTrace' field in the GELF output. Default: true.
 --log-gelf-level <level>
-                     The log level specifying which message levels will be logged by the GELF
-                       logger. Message levels lower than this value will be discarded. Default:
-                       INFO.
+                     DEPRECATED. The log level specifying which message levels will be logged by
+                       the GELF logger. Message levels lower than this value will be discarded.
+                       Default: INFO.
 --log-gelf-max-message-size <size>
-                     Maximum message size (in bytes). If the message size is exceeded, GELF will
-                       submit the message in multiple chunks. Default: 8192.
+                     DEPRECATED. Maximum message size (in bytes). If the message size is exceeded,
+                       GELF will submit the message in multiple chunks. Default: 8192.
 --log-gelf-port <port>
-                     The port the Logstash or Graylog Host is called on. Default: 12201.
+                     DEPRECATED. The port the Logstash or Graylog Host is called on. Default: 12201.
 --log-gelf-timestamp-format <pattern>
-                     Set the format for the GELF timestamp field. Uses Java SimpleDateFormat
-                       pattern. Default: yyyy-MM-dd HH:mm:ss,SSS.
+                     DEPRECATED. Set the format for the GELF timestamp field. Uses Java
+                       SimpleDateFormat pattern. Default: yyyy-MM-dd HH:mm:ss,SSS.
 --log-level <category:level>
                      The log level of the root category or a comma-separated list of individual
                        categories and their levels. For the root category, you don't need to
                        specify a category. Default: info.
 
+Truststore:
+
+--tls-hostname-verifier <tls-hostname-verifier>
+                     The TLS hostname verification policy for out-going HTTPS and SMTP requests.
+                       Possible values are: ANY, WILDCARD, STRICT. Default: WILDCARD.
+--truststore-paths <truststore-paths>
+                     List of pkcs12 (p12 or pfx file extensions), PEM files, or directories
+                       containing those files that will be used as a system truststore.
+
 Export:
 
 --dir <dir>          Set the path to a directory where files will be created with the exported data.
---file <file>        Set the path to a file that will be created with the exported data.
+--file <file>        Set the path to a file that will be created with the exported data. To export
+                       more than 500 users, export to a directory with different files instead.
 --realm <realm>      Set the name of the realm to export. If not set, all realms are going to be
                        exported.
 --users <strategy>   Set how users should be exported. Possible values are: skip, realm_file,
                        same_file, different_files. Default: different_files.
 --users-per-file <number>
                      Set the number of users per file. It is used only if 'users' is set to
-                       'different_files'. Default: 50.
+                       'different_files'. Increasing this number leads to exponentially increasing
+                       export times. Default: 50.

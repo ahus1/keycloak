@@ -4,9 +4,9 @@ import { CheckIcon, PencilAltIcon, TimesIcon } from "@patternfly/react-icons";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
+import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
-import { useAdminClient } from "../../context/auth/AdminClient";
 
 type UserLabelForm = {
   userLabel: string;
@@ -25,10 +25,9 @@ export const InlineLabelEdit = ({
   isEditable,
   toggle,
 }: InlineLabelEditProps) => {
-  const { t } = useTranslation("users");
+  const { t } = useTranslation();
   const { register, handleSubmit } = useForm<UserLabelForm>();
 
-  const { adminClient } = useAdminClient();
   const { addAlert, addError } = useAlerts();
 
   const saveUserLabel = async (userLabel: UserLabelForm) => {
@@ -38,12 +37,12 @@ export const InlineLabelEdit = ({
           id: userId,
           credentialId: credential.id!,
         },
-        userLabel.userLabel || ""
+        userLabel.userLabel || "",
       );
       addAlert(t("updateCredentialUserLabelSuccess"), AlertVariant.success);
       toggle();
     } catch (error) {
-      addError("users:updateCredentialUserLabelError", error);
+      addError("updateCredentialUserLabelError", error);
     }
   };
 
@@ -69,6 +68,7 @@ export const InlineLabelEdit = ({
                   data-testid="editUserLabelAcceptBtn"
                   variant="link"
                   className="kc-editUserLabelAcceptBtn"
+                  aria-label={t("acceptBtn")}
                   type="submit"
                   icon={<CheckIcon />}
                 />
@@ -76,6 +76,7 @@ export const InlineLabelEdit = ({
                   data-testid="editUserLabelCancelBtn"
                   variant="link"
                   className="kc-editUserLabel-cancelBtn"
+                  aria-label={t("cancelBtn")}
                   onClick={toggle}
                   icon={<TimesIcon />}
                 />

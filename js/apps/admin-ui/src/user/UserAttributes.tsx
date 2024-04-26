@@ -1,72 +1,46 @@
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useForm } from "react-hook-form";
-import {
-  AlertVariant,
-  PageSection,
-  PageSectionVariants,
-} from "@patternfly/react-core";
-
 import type UserRepresentation from "@keycloak/keycloak-admin-client/lib/defs/userRepresentation";
+import { PageSection, PageSectionVariants } from "@patternfly/react-core";
+import { UseFormReturn, useFormContext } from "react-hook-form";
 
-import { useAlerts } from "../components/alert/Alerts";
 import {
   AttributeForm,
   AttributesForm,
 } from "../components/key-value-form/AttributeForm";
+import { UserFormFields, toUserFormFields } from "./form-state";
 import {
-  arrayToKeyValue,
-  keyValueToArray,
-  KeyValueType,
-} from "../components/key-value-form/key-value-convert";
-import { useAdminClient } from "../context/auth/AdminClient";
-import { useUserProfile } from "../realm-settings/user-profile/UserProfileContext";
+  UnmanagedAttributePolicy,
+  UserProfileConfig,
+} from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 
 type UserAttributesProps = {
   user: UserRepresentation;
+  save: (user: UserFormFields) => void;
+  upConfig?: UserProfileConfig;
 };
 
-export const UserAttributes = ({ user: defaultUser }: UserAttributesProps) => {
-  const { t } = useTranslation("users");
-  const { adminClient } = useAdminClient();
-  const { addAlert, addError } = useAlerts();
-  const [user, setUser] = useState<UserRepresentation>(defaultUser);
-  const form = useForm<AttributeForm>({ mode: "onChange" });
-  const { config } = useUserProfile();
-
-  const convertAttributes = () => {
-    return arrayToKeyValue<UserRepresentation>(user.attributes!).filter(
-      (a: KeyValueType) =>
-        !config?.attributes?.some((attribute) => attribute.name === a.key)
-    );
-  };
-
-  useEffect(() => {
-    form.setValue("attributes", convertAttributes());
-  }, [user, config]);
-
-  const save = async (attributeForm: AttributeForm) => {
-    try {
-      const attributes = keyValueToArray(attributeForm.attributes!);
-      await adminClient.users.update({ id: user.id! }, { ...user, attributes });
-
-      setUser({ ...user, attributes });
-      addAlert(t("userSaved"), AlertVariant.success);
-    } catch (error) {
-      addError("groups:groupUpdateError", error);
-    }
-  };
+export const UserAttributes = ({
+  user,
+  save,
+  upConfig,
+}: UserAttributesProps) => {
+  const form = useFormContext<UserFormFields>();
 
   return (
     <PageSection variant={PageSectionVariants.light}>
       <AttributesForm
-        form={form}
+        form={form as UseFormReturn<AttributeForm>}
         save={save}
         fineGrainedAccess={user.access?.manage}
         reset={() =>
           form.reset({
-            attributes: convertAttributes(),
+            ...form.getValues(),
+            attributes: toUserFormFields(user).attributes,
           })
+        }
+        name="unmanagedAttributes"
+        isDisabled={
+          UnmanagedAttributePolicy.AdminView ==
+          upConfig?.unmanagedAttributePolicy
         }
       />
     </PageSection>

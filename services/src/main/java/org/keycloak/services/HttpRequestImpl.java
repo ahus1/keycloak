@@ -17,24 +17,23 @@
 
 package org.keycloak.services;
 
-import static javax.ws.rs.core.MediaType.MULTIPART_FORM_DATA_TYPE;
-import static javax.ws.rs.core.MediaType.TEXT_PLAIN_TYPE;
+import static jakarta.ws.rs.core.MediaType.MULTIPART_FORM_DATA_TYPE;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.security.cert.X509Certificate;
-import java.util.List;
-import java.util.Map;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.UriInfo;
-import javax.ws.rs.ext.MessageBodyReader;
-import javax.ws.rs.ext.Providers;
-import org.jboss.resteasy.core.ResteasyContext;
-import org.jboss.resteasy.plugins.providers.multipart.InputPart;
-import org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataInput;
+import java.util.Collection;
+import java.util.Map.Entry;
+
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.UriInfo;
+import jakarta.ws.rs.ext.MessageBodyReader;
+import jakarta.ws.rs.ext.Providers;
+import org.jboss.resteasy.reactive.server.multipart.FormValue;
+import org.jboss.resteasy.reactive.server.multipart.MultipartFormDataInput;
+import org.keycloak.common.util.Resteasy;
 import org.keycloak.http.FormPartValue;
 import org.keycloak.http.HttpRequest;
 
@@ -75,7 +74,7 @@ public class HttpRequestImpl implements HttpRequest {
                 return new MultivaluedHashMap<>();
             }
 
-            Providers providers = ResteasyContext.getContextData(Providers.class);
+            Providers providers = Resteasy.getContextData(Providers.class);
             MessageBodyReader<MultipartFormDataInput> multiPartProvider = providers.getMessageBodyReader(
                     MultipartFormDataInput.class, null, null, MULTIPART_FORM_DATA_TYPE);
             MultipartFormDataInput inputs = multiPartProvider
@@ -83,14 +82,12 @@ public class HttpRequestImpl implements HttpRequest {
                             delegate.getInputStream());
             MultivaluedHashMap<String, FormPartValue> parts = new MultivaluedHashMap<>();
 
-            for (Map.Entry<String, List<InputPart>> entry : inputs.getFormDataMap().entrySet()) {
-                for (InputPart value : entry.getValue()) {
-                    MediaType valueMediaType = value.getMediaType();
-
-                    if (TEXT_PLAIN_TYPE.isCompatible(valueMediaType)) {
-                        parts.add(entry.getKey(), new FormPartValueImpl(value.getBodyAsString()));
+            for (Entry<String, Collection<FormValue>> entry : inputs.getValues().entrySet()) {
+                for (FormValue value : entry.getValue()) {
+                    if (!value.isFileItem()) {
+                        parts.add(entry.getKey(), new FormPartValueImpl(value.getValue()));
                     } else {
-                        parts.add(entry.getKey(), new FormPartValueImpl(value.getBody(InputStream.class, null)));
+                        parts.add(entry.getKey(), new FormPartValueImpl(value.getFileItem().getInputStream()));
                     }
                 }
             }
@@ -114,7 +111,7 @@ public class HttpRequestImpl implements HttpRequest {
         if (delegate == null) {
             return null;
         }
-        return (X509Certificate[]) delegate.getAttribute("javax.servlet.request.X509Certificate");
+        return (X509Certificate[]) delegate.getAttribute("jakarta.servlet.request.X509Certificate");
     }
 
     @Override

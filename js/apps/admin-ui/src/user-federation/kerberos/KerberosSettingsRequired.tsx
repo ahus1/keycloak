@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   FormGroup,
   Select,
@@ -10,13 +9,14 @@ import { isEqual } from "lodash-es";
 import { useState } from "react";
 import { Controller, UseFormReturn, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-
-import { FormAccess } from "../../components/form-access/FormAccess";
 import { HelpItem } from "ui-shared";
+
+import { adminClient } from "../../admin-client";
+import { FormAccess } from "../../components/form/FormAccess";
 import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { WizardSectionHeader } from "../../components/wizard-section-header/WizardSectionHeader";
-import { useAdminClient, useFetch } from "../../context/auth/AdminClient";
 import { useRealm } from "../../context/realm-context/RealmContext";
+import { useFetch } from "../../utils/useFetch";
 
 export type KerberosSettingsRequiredProps = {
   form: UseFormReturn;
@@ -29,10 +29,8 @@ export const KerberosSettingsRequired = ({
   showSectionHeading = false,
   showSectionDescription = false,
 }: KerberosSettingsRequiredProps) => {
-  const { t } = useTranslation("user-federation");
-  const { t: helpText } = useTranslation("user-federation-help");
+  const { t } = useTranslation();
 
-  const { adminClient } = useAdminClient();
   const { realm } = useRealm();
 
   const [isEditModeDropdownOpen, setIsEditModeDropdownOpen] = useState(false);
@@ -45,7 +43,7 @@ export const KerberosSettingsRequired = ({
   useFetch(
     () => adminClient.realms.findOne({ realm }),
     (result) => form.setValue("parentId", result!.id),
-    []
+    [],
   );
 
   return (
@@ -53,7 +51,7 @@ export const KerberosSettingsRequired = ({
       {showSectionHeading && (
         <WizardSectionHeader
           title={t("requiredSettings")}
-          description={helpText("kerberosRequiredSettingsDescription")}
+          description={t("kerberosRequiredSettingsDescription")}
           showDescription={showSectionDescription}
         />
       )}
@@ -64,14 +62,14 @@ export const KerberosSettingsRequired = ({
           label={t("uiDisplayName")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:uiDisplayNameHelp")}
-              fieldLabelId="user-federation:uiDisplayName"
+              helpText={t("uiDisplayNameHelp")}
+              fieldLabelId="uiDisplayName"
             />
           }
           fieldId="kc-ui-display-name"
           isRequired
           validated={form.formState.errors.name ? "error" : "default"}
-          helperTextInvalid={form.formState.errors.name?.message}
+          helperTextInvalid={(form.formState.errors.name as any)?.message}
         >
           {/* These hidden fields are required so data object written back matches data retrieved */}
           <KeycloakTextInput
@@ -112,19 +110,19 @@ export const KerberosSettingsRequired = ({
           label={t("kerberosRealm")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:kerberosRealmHelp")}
-              fieldLabelId="user-federation:kc-kerberos-realm"
+              helpText={t("kerberosRealmHelp")}
+              fieldLabelId="kc-kerberos-realm"
             />
           }
           fieldId="kc-kerberos-realm"
           isRequired
           validated={
-            form.formState.errors.config?.kerberosRealm?.[0]
+            (form.formState.errors.config as any)?.kerberosRealm?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.kerberosRealm?.[0].message
+            (form.formState.errors.config as any)?.kerberosRealm?.[0].message
           }
         >
           <KeycloakTextInput
@@ -132,7 +130,7 @@ export const KerberosSettingsRequired = ({
             id="kc-kerberos-realm"
             data-testid="kerberos-realm"
             validated={
-              form.formState.errors.config?.kerberosRealm?.[0]
+              (form.formState.errors.config as any)?.kerberosRealm?.[0]
                 ? "error"
                 : "default"
             }
@@ -149,19 +147,19 @@ export const KerberosSettingsRequired = ({
           label={t("serverPrincipal")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:serverPrincipalHelp")}
-              fieldLabelId="user-federation:serverPrincipal"
+              helpText={t("serverPrincipalHelp")}
+              fieldLabelId="serverPrincipal"
             />
           }
           fieldId="kc-server-principal"
           isRequired
           validated={
-            form.formState.errors.config?.serverPrincipal?.[0]
+            (form.formState.errors.config as any)?.serverPrincipal?.[0]
               ? "error"
               : "default"
           }
           helperTextInvalid={
-            form.formState.errors.config?.serverPrincipal?.[0].message
+            (form.formState.errors.config as any)?.serverPrincipal?.[0].message
           }
         >
           <KeycloakTextInput
@@ -169,7 +167,7 @@ export const KerberosSettingsRequired = ({
             id="kc-server-principal"
             data-testid="kerberos-principal"
             validated={
-              form.formState.errors.config?.serverPrincipal?.[0]
+              (form.formState.errors.config as any)?.serverPrincipal?.[0]
                 ? "error"
                 : "default"
             }
@@ -185,24 +183,27 @@ export const KerberosSettingsRequired = ({
         <FormGroup
           label={t("keyTab")}
           labelIcon={
-            <HelpItem
-              helpText={t("user-federation-help:keyTabHelp")}
-              fieldLabelId="user-federation:keyTab"
-            />
+            <HelpItem helpText={t("keyTabHelp")} fieldLabelId="keyTab" />
           }
           fieldId="kc-key-tab"
           isRequired
           validated={
-            form.formState.errors.config?.keyTab?.[0] ? "error" : "default"
+            (form.formState.errors.config as any)?.keyTab?.[0]
+              ? "error"
+              : "default"
           }
-          helperTextInvalid={form.formState.errors.config?.keyTab?.[0].message}
+          helperTextInvalid={
+            (form.formState.errors.config as any)?.keyTab?.[0].message
+          }
         >
           <KeycloakTextInput
             isRequired
             id="kc-key-tab"
             data-testid="kerberos-keytab"
             validated={
-              form.formState.errors.config?.keyTab?.[0] ? "error" : "default"
+              (form.formState.errors.config as any)?.keyTab?.[0]
+                ? "error"
+                : "default"
             }
             {...form.register("config.keyTab.0", {
               required: {
@@ -216,10 +217,7 @@ export const KerberosSettingsRequired = ({
         <FormGroup
           label={t("debug")}
           labelIcon={
-            <HelpItem
-              helpText={t("user-federation-help:debugHelp")}
-              fieldLabelId="user-federation:debug"
-            />
+            <HelpItem helpText={t("debugHelp")} fieldLabelId="debug" />
           }
           fieldId="kc-debug"
           hasNoPaddingTop
@@ -235,8 +233,8 @@ export const KerberosSettingsRequired = ({
                 data-testid="debug"
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value?.[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("debug")}
               />
             )}
@@ -247,10 +245,8 @@ export const KerberosSettingsRequired = ({
           label={t("allowPasswordAuthentication")}
           labelIcon={
             <HelpItem
-              helpText={t(
-                "user-federation-help:allowPasswordAuthenticationHelp"
-              )}
-              fieldLabelId="user-federation:allowPasswordAuthentication"
+              helpText={t("allowPasswordAuthenticationHelp")}
+              fieldLabelId="allowPasswordAuthentication"
             />
           }
           fieldId="kc-allow-password-authentication"
@@ -266,8 +262,8 @@ export const KerberosSettingsRequired = ({
                 data-testid="allow-password-authentication"
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value?.[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("allowPasswordAuthentication")}
               />
             )}
@@ -279,8 +275,8 @@ export const KerberosSettingsRequired = ({
             label={t("editMode")}
             labelIcon={
               <HelpItem
-                helpText={t("user-federation-help:editModeKerberosHelp")}
-                fieldLabelId="user-federation:editMode"
+                helpText={t("editModeKerberosHelp")}
+                fieldLabelId="editMode"
               />
             }
             isRequired
@@ -319,8 +315,8 @@ export const KerberosSettingsRequired = ({
           label={t("updateFirstLogin")}
           labelIcon={
             <HelpItem
-              helpText={t("user-federation-help:updateFirstLoginHelp")}
-              fieldLabelId="user-federation:updateFirstLogin"
+              helpText={t("updateFirstLoginHelp")}
+              fieldLabelId="updateFirstLogin"
             />
           }
           fieldId="kc-update-first-login"
@@ -336,8 +332,8 @@ export const KerberosSettingsRequired = ({
                 data-testid="update-first-login"
                 onChange={(value) => field.onChange([`${value}`])}
                 isChecked={field.value?.[0] === "true"}
-                label={t("common:on")}
-                labelOff={t("common:off")}
+                label={t("on")}
+                labelOff={t("off")}
                 aria-label={t("updateFirstLogin")}
               />
             )}

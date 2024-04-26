@@ -10,15 +10,16 @@ import {
   PageHeaderToolsGroup,
   PageHeaderToolsItem,
 } from "@patternfly/react-core";
-import Keycloak from "keycloak-js";
 import { ReactNode } from "react";
 
 import { KeycloakDropdown } from "./KeycloakDropdown";
 import { useTranslation } from "./translation/useTranslation";
 import { loggedInUserName } from "./util";
+import { DefaultAvatar } from "./DefaultAvatar";
+import { useKeycloak } from "./KeycloakContext";
 
 type BrandLogo = BrandProps & {
-  onClick?: () => void;
+  href: string;
 };
 
 type KeycloakMastheadProps = PageHeaderProps & {
@@ -29,25 +30,26 @@ type KeycloakMastheadProps = PageHeaderProps & {
     hasManageAccount?: boolean;
     hasUsername?: boolean;
   };
-  keycloak?: Keycloak;
   kebabDropdownItems?: ReactNode[];
-  dropdownItems: ReactNode[];
+  dropdownItems?: ReactNode[];
+  toolbarItems?: ReactNode[];
 };
 
 const KeycloakMasthead = ({
-  brand: { onClick: onBrandLogoClick, ...brandProps },
+  brand: { href: brandHref, ...brandProps },
   avatar,
   features: {
     hasLogout = true,
     hasManageAccount = true,
     hasUsername = true,
   } = {},
-  keycloak,
   kebabDropdownItems,
-  dropdownItems,
+  dropdownItems = [],
+  toolbarItems,
   ...rest
 }: KeycloakMastheadProps) => {
   const { t } = useTranslation();
+  const { keycloak } = useKeycloak()!;
   const extraItems = [];
   if (hasManageAccount) {
     extraItems.push(
@@ -56,14 +58,14 @@ const KeycloakMasthead = ({
         onClick={() => keycloak?.accountManagement()}
       >
         {t("manageAccount")}
-      </DropdownItem>
+      </DropdownItem>,
     );
   }
   if (hasLogout) {
     extraItems.push(
       <DropdownItem key="signOut" onClick={() => keycloak?.logout()}>
         {t("signOut")}
-      </DropdownItem>
+      </DropdownItem>,
     );
   }
 
@@ -71,12 +73,8 @@ const KeycloakMasthead = ({
   return (
     <PageHeader
       {...rest}
-      logo={
-        <div onClick={onBrandLogoClick}>
-          <Brand {...brandProps} />
-        </div>
-      }
-      logoComponent="div"
+      logo={<Brand {...brandProps} />}
+      logoProps={{ href: brandHref }}
       headerTools={
         <PageHeaderTools>
           <PageHeaderToolsGroup>
@@ -86,6 +84,7 @@ const KeycloakMasthead = ({
               }}
             >
               <KeycloakDropdown
+                data-testid="options-kebab"
                 isKebab
                 dropDownItems={[
                   ...(kebabDropdownItems || dropdownItems),
@@ -93,6 +92,7 @@ const KeycloakMasthead = ({
                 ]}
               />
             </PageHeaderToolsItem>
+            <PageHeaderToolsItem>{toolbarItems}</PageHeaderToolsItem>
             <PageHeaderToolsItem
               visibility={{
                 default: "hidden",
@@ -100,18 +100,21 @@ const KeycloakMasthead = ({
               }}
             >
               <KeycloakDropdown
+                data-testid="options"
                 dropDownItems={[...dropdownItems, extraItems]}
                 title={
-                  hasUsername && keycloak
-                    ? loggedInUserName(keycloak, t)
+                  hasUsername
+                    ? loggedInUserName(keycloak?.tokenParsed, t)
                     : undefined
                 }
               />
             </PageHeaderToolsItem>
           </PageHeaderToolsGroup>
-          <Avatar
-            {...{ src: picture || "/avatar.svg", alt: t("avatar"), ...avatar }}
-          />
+          {picture || avatar?.src ? (
+            <Avatar {...{ src: picture, alt: t("avatar"), ...avatar }} />
+          ) : (
+            <DefaultAvatar {...avatar} />
+          )}
         </PageHeaderTools>
       }
     />
