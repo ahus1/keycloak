@@ -207,6 +207,7 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         addStorageOptions(storeProvider, commands);
         addFeaturesOption(commands);
 
+        // TODO: look at the enabled features instead
         if (configuration.isRemoteCaches()) {
             commands.add("--cache-remote-host=localhost");
             commands.add("--cache-remote-username=keycloak");

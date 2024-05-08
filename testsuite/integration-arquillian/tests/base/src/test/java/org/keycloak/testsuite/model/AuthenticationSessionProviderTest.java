@@ -31,14 +31,12 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserManager;
 import org.keycloak.models.UserModel;
-import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthenticationSessionProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.ResetTimeOffsetEvent;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.services.managers.ClientManager;
 import org.keycloak.services.managers.RealmManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
-import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.sessions.CommonClientSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.testsuite.AbstractTestRealmKeycloakTest;
@@ -50,7 +48,6 @@ import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNull.notNullValue;
 import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assume.assumeFalse;
-import static org.junit.Assume.assumeTrue;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -217,9 +214,7 @@ public class AuthenticationSessionProviderTest extends AbstractTestRealmKeycloak
     @Test
     @ModelTest
     public void testExpiredAuthSessions(KeycloakSession session) {
-        // for some reason, Profile is always null.
-        var provider = KeycloakModelUtils.runJobInTransactionWithResult(session.getKeycloakSessionFactory(), KeycloakSession::authenticationSessions);
-        assumeFalse(provider instanceof RemoteInfinispanAuthenticationSessionProvider);
+        assumeFalse(Profile.isFeatureEnabled(Profile.Feature.REMOTE_CACHE));
         AtomicReference<String> authSessionID = new AtomicReference<>();
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession sessionExpired) -> {
