@@ -19,6 +19,7 @@ package org.keycloak.connections.infinispan;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -172,7 +173,28 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
 
     @Override
     public void init(Config.Scope config) {
-        this.config = config;
+        String prefixInternal = "infinispan.client.hotrod.";
+        String prefixExternal = "hotrod-";
+
+        Properties p = new Properties() {
+            @Override
+            public String getProperty(String key) {
+                if (key.startsWith(prefixInternal)) {
+                    return config.get(prefixExternal + key.substring(prefixInternal.length()));
+                } else {
+                    return null;
+                }
+            }
+
+            @Override
+            public Object get(Object key) {
+                return getProperty(key.toString());
+            }
+        };
+        // --spi-connections-infinispan-default-hotrod-connection_pool-max_active
+        // NOTE: underscores are are kept, and not mapped to dashes.
+        // NOTE: config.getPropertyNames() will get full property names, and won't work well with the mixed cased id 'connectionsInfinispan'
+        p.getProperty("infinispan.client.hotrod.connection_pool.max_active");
     }
 
     @Override
