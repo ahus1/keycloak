@@ -20,6 +20,8 @@ package org.keycloak.protocol.oidc;
 import java.util.Collections;
 import java.util.HashMap;
 import org.jboss.logging.Logger;
+import org.keycloak.broker.oidc.OIDCIdentityProviderConfig;
+import org.keycloak.broker.provider.IdentityProvider;
 import org.keycloak.common.Profile.Feature;
 import org.keycloak.http.HttpRequest;
 import org.keycloak.OAuth2Constants;
@@ -1447,7 +1449,7 @@ public class TokenManager {
         }
 
         LogoutToken logoutToken = logoutTokenOptional.get();
-        List<OIDCIdentityProvider> identityProviders = getOIDCIdentityProviders(realm, session).toList();
+        List<OIDCIdentityProvider> identityProviders = getOIDCIdentityProviders(realm, session, logoutToken.getIssuer()).toList();
         if (identityProviders.isEmpty()) {
             return LogoutTokenValidationCode.COULD_NOT_FIND_IDP;
         }
@@ -1492,14 +1494,12 @@ public class TokenManager {
 
 
     public Stream<OIDCIdentityProvider> getValidOIDCIdentityProvidersForBackchannelLogout(RealmModel realm, KeycloakSession session, String encodedLogoutToken, LogoutToken logoutToken) {
-        return validateLogoutTokenAgainstIdpProvider(getOIDCIdentityProviders(realm, session), encodedLogoutToken, logoutToken);
+        return validateLogoutTokenAgainstIdpProvider(getOIDCIdentityProviders(realm, session, logoutToken.getIssuer()), encodedLogoutToken, logoutToken);
     }
 
 
     public Stream<OIDCIdentityProvider> validateLogoutTokenAgainstIdpProvider(Stream<OIDCIdentityProvider> oidcIdps, String encodedLogoutToken, LogoutToken logoutToken) {
             return oidcIdps
-                    .filter(oidcIdp -> oidcIdp.getConfig().getIssuer() != null)
-                    .filter(oidcIdp -> oidcIdp.isIssuer(logoutToken.getIssuer(), null))
                     .filter(oidcIdp -> {
                         try {
                             oidcIdp.validateToken(encodedLogoutToken);
@@ -1511,9 +1511,12 @@ public class TokenManager {
                     });
     }
 
-    private Stream<OIDCIdentityProvider> getOIDCIdentityProviders(RealmModel realm, KeycloakSession session) {
+    private Stream<OIDCIdentityProvider> getOIDCIdentityProviders(RealmModel realm, KeycloakSession session, String issuer) {
         try {
-            return session.identityProviders().getAllStream()
+            return session.identityProviders()
+                    .getAllStream(Map.of(
+                            OIDCIdentityProviderConfig.ISSUER, issuer
+                    ), -1, -1)
                     .map(idpModel ->
                         IdentityBrokerService.getIdentityProviderFactory(session, idpModel).create(session, idpModel))
                     .filter(OIDCIdentityProvider.class::isInstance)
