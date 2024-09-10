@@ -81,7 +81,11 @@
             <groupId>org.twitter4j</groupId>
             <artifactId>twitter4j-core</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-apache-httpclient-4.3</artifactId>
+            <version>2.5.0-alpha</version>
+        </dependency>
         <dependency>
             <groupId>org.jboss.logging</groupId>
             <artifactId>jboss-logging</artifactId>

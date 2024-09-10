@@ -1,7 +1,13 @@
 package org.keycloak.crypto.hash;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.Tracer;
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.jboss.logging.Logger;
+import org.keycloak.common.Version;
 import org.keycloak.common.util.Base64;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.credential.hash.PasswordHashProvider;
@@ -101,6 +107,14 @@ public class Argon2PasswordHashProvider implements PasswordHashProvider {
     }
 
     private String encode(String rawPassword, byte[] salt, String version, String type, int hashLength, int parallelism, int memory, int iterations) {
+        OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+        Span span = null;
+        if (openTelemetry != null) {
+            Tracer tracer = openTelemetry.getTracer(Argon2PasswordHashProvider.class.getName(), Version.VERSION);
+            SpanBuilder spanBuilder = tracer.spanBuilder(this.getClass().getName() + ".encode");
+            span = spanBuilder.startSpan();
+        }
+
         try {
             try {
                 cpuCoreSemaphore.acquire();
@@ -122,6 +136,9 @@ public class Argon2PasswordHashProvider implements PasswordHashProvider {
             generator.generateBytes(rawPassword.toCharArray(), result);
             return Base64.encodeBytes(result);
         } finally {
+            if (span != null) {
+                span.end();
+            }
             cpuCoreSemaphore.release();
         }
     }

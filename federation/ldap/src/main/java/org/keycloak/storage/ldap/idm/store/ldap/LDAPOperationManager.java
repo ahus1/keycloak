@@ -17,7 +17,14 @@
 
 package org.keycloak.storage.ldap.idm.store.ldap;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
 import org.jboss.logging.Logger;
+import org.keycloak.common.Version;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.LDAPConstants;
@@ -524,7 +531,7 @@ public class LDAPOperationManager {
             if (logger.isDebugEnabled()) {
                 logger.debugf(re, "LDAP Connection TimeOut for DN [%s]", dn);
             }
-            
+
             throw re;
 
         } catch (Exception e) {
@@ -721,13 +728,33 @@ public class LDAPOperationManager {
             start = Time.currentTimeMillis();
         }
 
+        Span span = null;
         try {
             if (decorator != null) {
                 decorator.beforeLDAPOperation(context, operation);
             }
 
+            OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+            if (openTelemetry != null) {
+                Tracer ldap = openTelemetry.getTracer(LDAPOperationManager.class.getSimpleName(), Version.VERSION);
+                SpanBuilder spanBuilder = ldap.spanBuilder(this.getClass().getName() + ".execute");
+                span = spanBuilder.startSpan();
+                if (span.isRecording()) {
+                    span.setAttribute(Context.PROVIDER_URL, context.getEnvironment().get(Context.PROVIDER_URL).toString());
+                    span.setAttribute("operation", operation.toString());
+                }
+            }
             return operation.execute(context);
+        } catch (NamingException ex) {
+            if (span != null) {
+                span.setStatus(StatusCode.ERROR);
+                span.recordException(ex);
+            }
+            throw ex;
         } finally {
+            if (span != null) {
+                span.end();
+            }
             if (perfLogger.isDebugEnabled()) {
                 long took = Time.currentTimeMillis() - start;
 

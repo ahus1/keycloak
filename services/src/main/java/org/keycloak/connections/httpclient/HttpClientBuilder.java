@@ -17,6 +17,10 @@
 
 package org.keycloak.connections.httpclient;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.instrumentation.apachehttpclient.v4_3.ApacheHttpClientTelemetry;
+import io.opentelemetry.instrumentation.apachehttpclient.v4_3.ApacheHttpClientTelemetryBuilder;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
 import org.apache.http.conn.ssl.BrowserCompatHostnameVerifier;
@@ -254,7 +258,16 @@ public class HttpClientBuilder {
                     .setSocketTimeout((int) TimeUnit.MILLISECONDS.convert(socketTimeout, socketTimeoutUnits))
                     .setExpectContinueEnabled(expectContinueEnabled).build();
 
-            org.apache.http.impl.client.HttpClientBuilder builder = HttpClients.custom()
+            OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+            org.apache.http.impl.client.HttpClientBuilder builder;
+            if (openTelemetry != null) {
+                ApacheHttpClientTelemetryBuilder apacheHttpClientTelemetryBuilder = ApacheHttpClientTelemetry.builder(openTelemetry);
+                builder = apacheHttpClientTelemetryBuilder.build().newHttpClientBuilder();
+            } else {
+                builder = HttpClients.custom();
+            }
+
+            builder
                     .setDefaultRequestConfig(requestConfig)
                     .setSSLSocketFactory(sslsf)
                     .setMaxConnTotal(connectionPoolSize)

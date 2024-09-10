@@ -1,6 +1,13 @@
 package org.keycloak.storage.ldap.idm.store.ldap;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
 import org.jboss.logging.Logger;
+import org.keycloak.common.Version;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.LDAPConstants;
 import org.keycloak.storage.ldap.LDAPConfig;
@@ -60,31 +67,52 @@ public final class LDAPContextManager implements AutoCloseable {
     }
 
     private void createLdapContext() throws NamingException {
-        Hashtable<Object, Object> connProp = getConnectionProperties(ldapConfig);
-
-        if (!LDAPConstants.AUTH_TYPE_NONE.equals(ldapConfig.getAuthType())) {
-            vaultStringSecret = getVaultSecret();
-
-            if (vaultStringSecret != null && !ldapConfig.isStartTls() && ldapConfig.getBindCredential() != null) {
-                connProp.put(SECURITY_CREDENTIALS, vaultStringSecret.get()
-                        .orElse(ldapConfig.getBindCredential()).toCharArray());
-            }
+        OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+        Span span = null;
+        if (openTelemetry != null) {
+            Tracer ldap = openTelemetry.getTracer(this.getClass().getName(), Version.VERSION);
+            SpanBuilder spanBuilder = ldap.spanBuilder(this.getClass().getSimpleName() + ".createLdapContext");
+            span = spanBuilder.startSpan();
         }
+        try {
 
-        ldapContext = new InitialLdapContext(connProp, null);
-        if (ldapConfig.isStartTls()) {
-            SSLSocketFactory sslSocketFactory = null;
-            if (LDAPUtil.shouldUseTruststoreSpi(ldapConfig)) {
-                TruststoreProvider provider = session.getProvider(TruststoreProvider.class);
-                sslSocketFactory = provider.getSSLSocketFactory();
+
+            Hashtable<Object, Object> connProp = getConnectionProperties(ldapConfig);
+
+            if (!LDAPConstants.AUTH_TYPE_NONE.equals(ldapConfig.getAuthType())) {
+                vaultStringSecret = getVaultSecret();
+
+                if (vaultStringSecret != null && !ldapConfig.isStartTls() && ldapConfig.getBindCredential() != null) {
+                    connProp.put(SECURITY_CREDENTIALS, vaultStringSecret.get()
+                            .orElse(ldapConfig.getBindCredential()).toCharArray());
+                }
             }
 
-            tlsResponse = startTLS(ldapContext, ldapConfig.getAuthType(), ldapConfig.getBindDN(),
-                    vaultStringSecret.get().orElse(ldapConfig.getBindCredential()), sslSocketFactory);
+            ldapContext = new InitialLdapContext(connProp, null);
+            if (ldapConfig.isStartTls()) {
+                SSLSocketFactory sslSocketFactory = null;
+                if (LDAPUtil.shouldUseTruststoreSpi(ldapConfig)) {
+                    TruststoreProvider provider = session.getProvider(TruststoreProvider.class);
+                    sslSocketFactory = provider.getSSLSocketFactory();
+                }
 
-            // Exception should be already thrown by LDAPContextManager.startTLS if "startTLS" could not be established, but rather do some additional check
-            if (tlsResponse == null) {
-                throw new NamingException("Wasn't able to establish LDAP connection through StartTLS");
+                tlsResponse = startTLS(ldapContext, ldapConfig.getAuthType(), ldapConfig.getBindDN(),
+                        vaultStringSecret.get().orElse(ldapConfig.getBindCredential()), sslSocketFactory);
+
+                // Exception should be already thrown by LDAPContextManager.startTLS if "startTLS" could not be established, but rather do some additional check
+                if (tlsResponse == null) {
+                    throw new NamingException("Wasn't able to establish LDAP connection through StartTLS");
+                }
+            }
+        } catch (NamingException e) {
+          if (span != null) {
+              span.recordException(e);
+              span.setStatus(StatusCode.ERROR);
+          }
+          throw e;
+        } finally {
+            if (span != null) {
+                span.end();
             }
         }
     }
