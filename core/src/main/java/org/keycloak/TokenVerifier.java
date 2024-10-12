@@ -17,6 +17,8 @@
 
 package org.keycloak;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
 import org.keycloak.common.VerificationException;
 import org.keycloak.exceptions.TokenNotActiveException;
 import org.keycloak.exceptions.TokenSignatureInvalidException;
@@ -27,6 +29,7 @@ import org.keycloak.jose.jws.JWSInputException;
 import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.jose.jws.crypto.HMACProvider;
 import org.keycloak.jose.jws.crypto.RSAProvider;
+import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.util.TokenUtil;
 
@@ -317,7 +320,7 @@ public class TokenVerifier<T extends JsonWebToken> {
     /**
      * Sets the key for verification of HMAC-based signature.
      * @param secretKey
-     * @return 
+     * @return
      */
     public TokenVerifier<T> secretKey(SecretKey secretKey) {
         this.secretKey = secretKey;
@@ -479,6 +482,14 @@ public class TokenVerifier<T extends JsonWebToken> {
                 throw new VerificationException("JWT check failed for check " + check);
             }
         }
+
+        T token = getToken();
+        Context context = io.opentelemetry.context.Context.current();
+        Span.fromContext(context).setAttribute("kc.token.issuer", token.getIssuer());
+        if (token instanceof AccessToken accessToken) {
+            Span.fromContext(context).setAttribute("kc.sessionId", accessToken.getSessionId());
+        }
+        Span.fromContext(context).setAttribute("kc.token.id", token.getId());
 
         return this;
     }

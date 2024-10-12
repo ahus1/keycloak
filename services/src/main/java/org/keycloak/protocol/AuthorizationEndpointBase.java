@@ -205,6 +205,8 @@ public abstract class AuthorizationEndpointBase {
             }
         }
 
+        session.getContext().setAuthenticationSession(authSession);
+
         session.getProvider(LoginFormsProvider.class).setAuthenticationSession(authSession);
 
         return authSession;

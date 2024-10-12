@@ -17,6 +17,8 @@
 
 package org.keycloak.services;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.keycloak.common.ClientConnection;
 import org.keycloak.http.HttpRequest;
@@ -103,6 +105,10 @@ public abstract class DefaultKeycloakContext implements KeycloakContext {
 
     @Override
     public void setRealm(RealmModel realm) {
+        if (realm != null) {
+            Context context = io.opentelemetry.context.Context.current();
+            Span.fromContext(context).setAttribute("kc.realm", realm.getName());
+        }
         this.realm = realm;
         this.uriInfo = null;
     }
@@ -114,6 +120,8 @@ public abstract class DefaultKeycloakContext implements KeycloakContext {
 
     @Override
     public void setClient(ClientModel client) {
+        Context context = io.opentelemetry.context.Context.current();
+        Span.fromContext(context).setAttribute("kc.client", client.getClientId());
         this.client = client;
     }
 
@@ -138,6 +146,8 @@ public abstract class DefaultKeycloakContext implements KeycloakContext {
 
     @Override
     public void setAuthenticationSession(AuthenticationSessionModel authenticationSession) {
+        Context context = io.opentelemetry.context.Context.current();
+        Span.fromContext(context).setAttribute("kc.authenticationSession", authenticationSession.getParentSession().getId() + "." + authenticationSession.getTabId());
         this.authenticationSession = authenticationSession;
     }
 

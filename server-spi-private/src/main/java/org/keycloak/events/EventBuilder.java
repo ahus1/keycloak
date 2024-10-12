@@ -17,6 +17,10 @@
 
 package org.keycloak.events;
 
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
 import org.jboss.logging.Logger;
 import org.keycloak.common.ClientConnection;
 import org.keycloak.common.util.Time;
@@ -34,6 +38,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -159,10 +164,10 @@ public class EventBuilder {
         event.getDetails().put(key, value);
         return this;
     }
-    
+
     /**
-     * Add event detail where strings from the input Collection are filtered not to contain <code>null</code> and then joined using <code>::</code> character. 
-     * 
+     * Add event detail where strings from the input Collection are filtered not to contain <code>null</code> and then joined using <code>::</code> character.
+     *
      * @param key of the detail
      * @param values, can be null
      * @return builder for chaining
@@ -173,10 +178,10 @@ public class EventBuilder {
         }
         return detail(key, values.stream().filter(Objects::nonNull).collect(Collectors.joining("::")));
     }
-    
+
     /**
-     * Add event detail where strings from the input Stream are filtered not to contain <code>null</code> and then joined using <code>::</code> character. 
-     * 
+     * Add event detail where strings from the input Stream are filtered not to contain <code>null</code> and then joined using <code>::</code> character.
+     *
      * @param key of the detail
      * @param values, can be null
      * @return builder for chaining
@@ -256,6 +261,22 @@ public class EventBuilder {
                 targetStore.onEvent(event);
             }
         }
+
+        Context context = Context.current();
+        AttributesBuilder ab = Attributes.builder();
+        ab.put("id", event.getId());
+        ab.put("realmId", event.getRealmId());
+        ab.put("realmName", event.getRealmName());
+        ab.put("clientId", event.getClientId());
+        ab.put("userId", event.getUserId());
+        ab.put("sessionId", event.getSessionId());
+        ab.put("ipAddress", event.getIpAddress());
+        ab.put("error", event.getError());
+        event.getDetails().forEach((k, v) -> {
+            ab.put("details." + k, v);
+        });
+
+        Span.fromContext(context).addEvent(event.getType().name(), ab.build(), event.getTime(), TimeUnit.MILLISECONDS);
 
         for (EventListenerProvider l : targetListeners) {
             try {

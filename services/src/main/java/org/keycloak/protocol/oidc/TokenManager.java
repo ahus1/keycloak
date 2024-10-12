@@ -19,6 +19,9 @@ package org.keycloak.protocol.oidc;
 
 import java.util.Collections;
 import java.util.HashMap;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
 import org.jboss.logging.Logger;
 import org.keycloak.broker.oidc.OIDCIdentityProviderConfig;
 import org.keycloak.common.Profile.Feature;
@@ -1036,6 +1039,11 @@ public class TokenManager {
         boolean offlineTokenRequested = offlineAccessScope == null ? false
                 : clientSessionCtx.getClientScopeIds().contains(offlineAccessScope.getId());
         token.exp(getTokenExpiration(realm, client, session, clientSession, offlineTokenRequested));
+
+        Context context = io.opentelemetry.context.Context.current();
+        Span.fromContext(context).setAttribute("kc.token.issuer", token.getIssuer());
+        Span.fromContext(context).setAttribute("kc.token.sid", token.getSessionId());
+        Span.fromContext(context).setAttribute("kc.token.id", token.getId());
 
         return token;
     }
