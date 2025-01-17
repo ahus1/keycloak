@@ -17,10 +17,10 @@
 
 package org.keycloak.theme.beans;
 
-import com.ibm.icu.util.ULocale;
 import jakarta.ws.rs.core.UriBuilder;
 import org.keycloak.models.RealmModel;
 
+import java.text.Bidi;
 import java.text.Collator;
 import java.util.List;
 import java.util.Properties;
@@ -72,8 +72,12 @@ public class LocaleBean {
         return rtl;
     }
 
-    public boolean isRtl(String languageTag) {
-        return CACHED_RTL_LANGUAGE_CODES.computeIfAbsent(languageTag, tag -> new ULocale(languageTag).isRightToLeft());
+    protected static boolean isRtl(String languageTag) {
+        return CACHED_RTL_LANGUAGE_CODES.computeIfAbsent(languageTag, tag -> {
+            java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
+            // use the locale's name in the language of the locale to determine if the language is RTL
+            return new Bidi(locale.getDisplayName(locale), Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).isRightToLeft();
+        });
     }
 
     public List<Locale> getSupported() {
