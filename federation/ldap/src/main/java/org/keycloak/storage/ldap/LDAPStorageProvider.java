@@ -1126,7 +1126,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                 }
             }
 
-            return Stream.iterate(ldapQuery,
+            return StreamsUtil.closing(Stream.iterate(ldapQuery,
                     query -> {
                         //the very 1st page - Pagination context might not yet be present
                         if (query.getPaginationContext() == null) try {
@@ -1146,7 +1146,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                             return Stream.empty();
                         }
                         return ldapObjects.stream();
-                    });
+                    })).onClose(ldapQuery::close);
         }
 
         return ldapQuery.getResultList().stream();
