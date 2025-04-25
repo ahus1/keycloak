@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -521,6 +522,20 @@ public class LDAPStorageProvider implements UserStorageProvider,
     }
 
     /**
+     * Keep the LDAPQuery around until the stream is closed and consumed, and only then close it.
+     */
+    private Stream<LDAPObject> prepareLdapStream (Supplier<LDAPQuery> ldapQuerySupplier, Function<LDAPQuery, Stream<LDAPObject>> ldapQueryFunction) {
+        LDAPQuery ldapQuery = ldapQuerySupplier.get();
+        try {
+            return StreamsUtil.closing(ldapQueryFunction.apply(ldapQuery)).onClose(ldapQuery::close);
+        } catch (RuntimeException e) {
+            // If the creation of the stream fails, close it immediately
+            ldapQuery.close();
+            throw e;
+        }
+    }
+
+    /**
      * Searches LDAP using logical conjunction of params. It uses the LDAP mappers
      * (method <em>getUserAttributes</em>) to control what attributes are
      * managed by the ldap server. If one attribute is not defined by the
@@ -536,7 +551,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                 .collect(Collectors.toSet());
 
         final boolean exact = Boolean.parseBoolean(attributes.get(UserModel.EXACT));
-        try (LDAPQuery ldapQuery = LDAPUtils.createQueryForUserSearch(this, realm)) {
+        return prepareLdapStream(() -> LDAPUtils.createQueryForUserSearch(this, realm), ldapQuery -> {
 
             LDAPQueryConditionsBuilder conditionsBuilder = new LDAPQueryConditionsBuilder();
 
@@ -578,7 +593,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                 }
             }
             return paginatedSearchLDAP(ldapQuery, firstResult, maxResults);
-        }
+        });
     }
 
     /**
@@ -595,8 +610,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
      * This method serves for {@code search} param of {@link org.keycloak.services.resources.admin.UsersResource#getUsers}
      */
     private Stream<LDAPObject> searchLDAP(RealmModel realm, String search, Integer firstResult, Integer maxResults) {
-
-        try (LDAPQuery ldapQuery = LDAPUtils.createQueryForUserSearch(this, realm)) {
+        return prepareLdapStream(() -> LDAPUtils.createQueryForUserSearch(this, realm), ldapQuery -> {
             LDAPQueryConditionsBuilder conditionsBuilder = new LDAPQueryConditionsBuilder();
 
             for (String s : search.split("\\s+")) {
@@ -620,7 +634,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
             }
 
             return paginatedSearchLDAP(ldapQuery, firstResult, maxResults);
-        }
+        });
     }
 
     /**
@@ -1126,7 +1140,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                 }
             }
 
-            return StreamsUtil.closing(Stream.iterate(ldapQuery,
+            return Stream.iterate(ldapQuery,
                     query -> {
                         //the very 1st page - Pagination context might not yet be present
                         if (query.getPaginationContext() == null) try {
@@ -1146,7 +1160,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
                             return Stream.empty();
                         }
                         return ldapObjects.stream();
-                    })).onClose(ldapQuery::close);
+                    });
         }
 
         return ldapQuery.getResultList().stream();
