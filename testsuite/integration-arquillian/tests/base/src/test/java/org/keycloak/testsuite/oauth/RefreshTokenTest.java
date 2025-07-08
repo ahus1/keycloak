@@ -49,6 +49,7 @@ import org.keycloak.models.Constants;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.UserSessionProvider;
 import org.keycloak.models.sessions.infinispan.changes.SessionEntityWrapper;
 import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionEntity;
 import org.keycloak.models.sessions.infinispan.entities.UserSessionEntity;
@@ -402,6 +403,273 @@ public class RefreshTokenTest extends AbstractKeycloakTest {
 
         AccessTokenResponse response = oauth.doRefreshTokenRequest(accessTokenString);
         Assert.assertNotEquals(200, response.getStatusCode());
+    }
+
+    @Test
+    public void refreshingAndExpiry() {
+
+        ProfileAssume.assumeFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS);
+
+        String realmName = KeycloakModelUtils.generateId();
+        RealmsResource realmsResource = realmsResouce();
+        realmsResource.create(RealmBuilder.create().name(realmName).build());
+        RealmResource realmResource = realmsResource.realm(realmName);
+        RealmRepresentation realm = realmResource.toRepresentation();
+
+        try {
+            realm.setSsoSessionMaxLifespan((int) TimeUnit.HOURS.toSeconds(12));
+            realm.setSsoSessionIdleTimeout((int) TimeUnit.HOURS.toSeconds(1));
+            realmResource.update(realm);
+
+            setTimeOffset(0);
+
+            realmResource.clients().create(org.keycloak.testsuite.util.ClientBuilder.create()
+                    .clientId("public-client")
+                    .redirectUris("*")
+                    .publicClient()
+                    .build());
+
+            realmResource.users()
+                    .create(UserBuilder.create().username("alice")
+                            .firstName("alice")
+                            .lastName("alice")
+                            .email("alice@keycloak.org")
+                            .password("alice").build());
+
+            oauth.realm(realmName);
+            oauth.client("public-client");
+
+            oauth.doLogin("alice", "alice");
+            String aliceCode = oauth.parseLoginResponse().getCode();
+            AccessTokenResponse response = oauth.doAccessTokenRequest(aliceCode);
+            Assert.assertEquals(200, response.getStatusCode());
+            String refreshTokenString = response.getRefreshToken();
+
+            for (int i = 1; i < 10; ++i) {
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                // Test when neither client nor user session is in the cache
+                testingClient.server().run(session -> {
+                    // session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+                    session.getProvider(UserSessionProvider.class).removeExpired(session.realms().getRealmByName(realmName));
+                });
+
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                response = oauth.doRefreshTokenRequest(refreshTokenString);
+                Assert.assertEquals("on iteration " + i, 200, response.getStatusCode());
+                refreshTokenString = response.getRefreshToken();
+            }
+
+        } finally {
+            setTimeOffset(0);
+            realmResource.remove();
+
+        }
+    }
+
+    @Test
+    public void refreshingAndExpiryByDeletingFromTheDatabase() {
+
+        ProfileAssume.assumeFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS);
+
+        String realmName = KeycloakModelUtils.generateId();
+        RealmsResource realmsResource = realmsResouce();
+        realmsResource.create(RealmBuilder.create().name(realmName).build());
+        RealmResource realmResource = realmsResource.realm(realmName);
+        RealmRepresentation realm = realmResource.toRepresentation();
+
+        try {
+            realm.setSsoSessionMaxLifespan((int) TimeUnit.HOURS.toSeconds(12));
+            realm.setSsoSessionIdleTimeout((int) TimeUnit.HOURS.toSeconds(1));
+            realmResource.update(realm);
+
+            setTimeOffset(0);
+
+            realmResource.clients().create(org.keycloak.testsuite.util.ClientBuilder.create()
+                    .clientId("public-client")
+                    .redirectUris("*")
+                    .publicClient()
+                    .build());
+
+            realmResource.users()
+                    .create(UserBuilder.create().username("alice")
+                            .firstName("alice")
+                            .lastName("alice")
+                            .email("alice@keycloak.org")
+                            .password("alice").build());
+
+            oauth.realm(realmName);
+            oauth.client("public-client");
+
+            oauth.doLogin("alice", "alice");
+            String aliceCode = oauth.parseLoginResponse().getCode();
+            AccessTokenResponse response = oauth.doAccessTokenRequest(aliceCode);
+            Assert.assertEquals(200, response.getStatusCode());
+            String refreshTokenString = response.getRefreshToken();
+
+            for (int i = 1; i < 10; ++i) {
+                // Set the time to when it expires to enfore the error "Session doesn't have required client"
+                // and also run session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i) + (int) TimeUnit.MINUTES.toSeconds(5));
+
+                // Test when neither client nor user session is in the cache
+                testingClient.server().run(session -> {
+                    // session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+                    session.getProvider(UserSessionProvider.class).removeExpired(session.realms().getRealmByName(realmName));
+                });
+
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                response = oauth.doRefreshTokenRequest(refreshTokenString);
+                Assert.assertEquals("on iteration " + i, 200, response.getStatusCode());
+                refreshTokenString = response.getRefreshToken();
+            }
+
+        } finally {
+            setTimeOffset(0);
+            realmResource.remove();
+
+        }
+    }
+
+    @Test
+    public void refreshingAndExpiryByRemovingItemFromHashMap() {
+
+        ProfileAssume.assumeFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS);
+
+        String realmName = KeycloakModelUtils.generateId();
+        RealmsResource realmsResource = realmsResouce();
+        realmsResource.create(RealmBuilder.create().name(realmName).build());
+        RealmResource realmResource = realmsResource.realm(realmName);
+        RealmRepresentation realm = realmResource.toRepresentation();
+
+        try {
+            realm.setSsoSessionMaxLifespan((int) TimeUnit.HOURS.toSeconds(12));
+            realm.setSsoSessionIdleTimeout((int) TimeUnit.HOURS.toSeconds(1));
+            realmResource.update(realm);
+
+            setTimeOffset(0);
+
+            realmResource.clients().create(org.keycloak.testsuite.util.ClientBuilder.create()
+                    .clientId("public-client")
+                    .redirectUris("*")
+                    .publicClient()
+                    .build());
+
+            realmResource.users()
+                    .create(UserBuilder.create().username("alice")
+                            .firstName("alice")
+                            .lastName("alice")
+                            .email("alice@keycloak.org")
+                            .password("alice").build());
+
+            oauth.realm(realmName);
+            oauth.client("public-client");
+
+            oauth.doLogin("alice", "alice");
+            String aliceCode = oauth.parseLoginResponse().getCode();
+            AccessTokenResponse response = oauth.doAccessTokenRequest(aliceCode);
+            Assert.assertEquals(200, response.getStatusCode());
+            String refreshTokenString = response.getRefreshToken();
+
+            for (int i = 1; i < 10; ++i) {
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                String sessionState = response.getSessionState();
+                // Test when neither client nor user session is in the cache
+                testingClient.server().run(session -> {
+                    SessionEntityWrapper<UserSessionEntity> wrapper = (SessionEntityWrapper<UserSessionEntity>) session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME)
+                            .get(sessionState);
+                    wrapper.getEntity().getAuthenticatedClientSessions().clear();
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+                    session.getProvider(UserSessionProvider.class).removeExpired(session.realms().getRealmByName(realmName));
+                });
+
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                response = oauth.doRefreshTokenRequest(refreshTokenString);
+                Assert.assertEquals("on iteration " + i, 200, response.getStatusCode());
+                refreshTokenString = response.getRefreshToken();
+            }
+
+        } finally {
+            setTimeOffset(0);
+            realmResource.remove();
+
+        }
+    }
+
+    @Test
+    public void refreshingAndGetTheClientSessions() {
+
+        ProfileAssume.assumeFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS);
+
+        String realmName = KeycloakModelUtils.generateId();
+        RealmsResource realmsResource = realmsResouce();
+        realmsResource.create(RealmBuilder.create().name(realmName).build());
+        RealmResource realmResource = realmsResource.realm(realmName);
+        RealmRepresentation realm = realmResource.toRepresentation();
+
+        try {
+            realm.setSsoSessionMaxLifespan((int) TimeUnit.HOURS.toSeconds(12));
+            realm.setSsoSessionIdleTimeout((int) TimeUnit.HOURS.toSeconds(1));
+            realmResource.update(realm);
+
+            setTimeOffset(0);
+
+            realmResource.clients().create(org.keycloak.testsuite.util.ClientBuilder.create()
+                    .clientId("public-client")
+                    .redirectUris("*")
+                    .publicClient()
+                    .build());
+
+            realmResource.users()
+                    .create(UserBuilder.create().username("alice")
+                            .firstName("alice")
+                            .lastName("alice")
+                            .email("alice@keycloak.org")
+                            .password("alice").build());
+
+            oauth.realm(realmName);
+            oauth.client("public-client");
+
+            oauth.doLogin("alice", "alice");
+            String aliceCode = oauth.parseLoginResponse().getCode();
+            AccessTokenResponse response = oauth.doAccessTokenRequest(aliceCode);
+            Assert.assertEquals(200, response.getStatusCode());
+            String refreshTokenString = response.getRefreshToken();
+
+            for (int i = 1; i < 10; ++i) {
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                String sessionState = response.getSessionState();
+                // Test when neither client nor user session is in the cache
+                testingClient.server().run(session -> {
+                    // session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+                    session.getProvider(UserSessionProvider.class).removeExpired(session.realms().getRealmByName(realmName));
+                });
+
+                testingClient.server().run(session -> {
+                    // session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+                    assertEquals(1, session.sessions().getUserSession(session.realms().getRealmByName(realmName), sessionState).getAuthenticatedClientSessions().size());
+                });
+
+                setTimeOffset((int) TimeUnit.MINUTES.toSeconds(59 * i));
+
+                response = oauth.doRefreshTokenRequest(refreshTokenString);
+                Assert.assertEquals("on iteration " + i, 200, response.getStatusCode());
+                refreshTokenString = response.getRefreshToken();
+            }
+
+        } finally {
+            setTimeOffset(0);
+            realmResource.remove();
+
+        }
     }
 
     @Test
