@@ -103,6 +103,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThan;
@@ -389,6 +390,46 @@ public class RefreshTokenTest extends AbstractKeycloakTest {
             assertThat(session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).size(),
                     greaterThan(0));
         });
+
+    }
+
+
+    @Test
+    public void refreshingTokenLoadsSessionIntoCacheViaDifferentMethods() {
+
+        ProfileAssume.assumeFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS);
+
+        oauth.doLogin("test-user@localhost", "password");
+
+        String code = oauth.parseLoginResponse().getCode();
+        String realmName = oauth.getRealm();
+        String clientId = oauth.getClientId();
+
+        AccessTokenResponse response = oauth.doAccessTokenRequest(code);
+
+        testingClient.server().run(session -> {
+            session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+            session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+            RealmModel realm = session.realms().getRealmByName(realmName);
+            UserModel user = session.users().getUserByEmail(realm, "test-user@localhost");
+            List<UserSessionModel> sessions = session.getProvider(UserSessionProvider.class).getUserSessionsStream(realm, user).toList();
+            assertThat(sessions.size(), equalTo(1));
+        });
+
+        response = oauth.doRefreshTokenRequest(response.getRefreshToken());
+        Assert.assertEquals(200, response.getStatusCode());
+
+        testingClient.server().run(session -> {
+            session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME).clear();
+            session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME).clear();
+            RealmModel realm = session.realms().getRealmByName(realmName);
+            ClientModel client = session.clients().getClientByClientId(realm, clientId);
+            List<UserSessionModel> sessions = session.getProvider(UserSessionProvider.class).getUserSessionsStream(realm, client).toList();
+            assertThat(sessions.size(), equalTo(1));
+        });
+
+        response = oauth.doRefreshTokenRequest(response.getRefreshToken());
+        Assert.assertEquals(200, response.getStatusCode());
 
     }
 
