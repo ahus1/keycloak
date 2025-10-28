@@ -49,9 +49,12 @@ import io.quarkus.narayana.jta.runtime.TransactionManagerBuildTimeConfig.UnsafeM
 import io.quarkus.resteasy.reactive.server.spi.MethodScannerBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.PreExceptionMapperHandlerBuildItem;
 import io.quarkus.runtime.configuration.ConfigurationException;
+import io.quarkus.vertx.http.deployment.FilterBuildItem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
+import io.quarkus.vertx.http.deployment.ManagementInterfaceFilterBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
+import io.quarkus.vertx.http.runtime.security.SecurityHandlerPriorities;
 import jakarta.persistence.Entity;
 import jakarta.persistence.PersistenceUnitTransactionType;
 import org.eclipse.microprofile.config.spi.ConfigSource;
@@ -120,6 +123,7 @@ import org.keycloak.quarkus.runtime.configuration.mappers.WildcardPropertyMapper
 import org.keycloak.quarkus.runtime.integration.resteasy.KeycloakHandlerChainCustomizer;
 import org.keycloak.quarkus.runtime.integration.resteasy.KeycloakTracingCustomizer;
 import org.keycloak.quarkus.runtime.logging.ClearMappedDiagnosticContextFilter;
+import org.keycloak.quarkus.runtime.services.RejectNonNormalizedPathFilter;
 import org.keycloak.quarkus.runtime.services.health.KeycloakClusterReadyHealthCheck;
 import org.keycloak.quarkus.runtime.services.health.KeycloakReadyHealthCheck;
 import org.keycloak.quarkus.runtime.storage.database.jpa.NamedJpaConnectionProviderFactory;
@@ -270,6 +274,29 @@ class KeycloakProcessor {
                                 .handler(recorder.getRedirectHandler(relativePath))
                                 .build())
                 );
+    }
+
+    @Record(ExecutionTime.STATIC_INIT)
+    @BuildStep
+    void filterAllRequests(BuildProducer<FilterBuildItem> filters,
+                           BuildProducer<ManagementInterfaceFilterBuildItem> managementFilters,
+                                      KeycloakRecorder recorder) {
+        if (!acceptNonNormalizedPaths()) {
+            filters.produce(new FilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
+        }
+    }
+
+    @Record(ExecutionTime.STATIC_INIT)
+    @BuildStep(onlyIf = IsManagementEnabled.class)
+    void filterAllManagementRequests(BuildProducer<ManagementInterfaceFilterBuildItem> filters,
+                           KeycloakRecorder recorder) {
+        if (!acceptNonNormalizedPaths()) {
+            filters.produce(new ManagementInterfaceFilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
+        }
+    }
+
+    private static boolean acceptNonNormalizedPaths() {
+        return Configuration.isTrue(HttpOptions.HTTP_ACCEPT_NON_NORMALIZED_PATHS);
     }
 
     @Record(ExecutionTime.STATIC_INIT)
