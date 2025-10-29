@@ -279,7 +279,7 @@ class KeycloakProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     @BuildStep
     void filterAllRequests(BuildProducer<FilterBuildItem> filters,
-                           BuildProducer<ManagementInterfaceFilterBuildItem> managementFilters,
+                           
                                       KeycloakRecorder recorder) {
         if (!acceptNonNormalizedPaths()) {
             filters.produce(new FilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
