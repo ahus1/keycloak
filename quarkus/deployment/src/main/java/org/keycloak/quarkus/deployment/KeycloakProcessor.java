@@ -278,9 +278,7 @@ class KeycloakProcessor {
 
     @Record(ExecutionTime.STATIC_INIT)
     @BuildStep
-    void filterAllRequests(BuildProducer<FilterBuildItem> filters,
-                           
-                                      KeycloakRecorder recorder) {
+    void filterAllRequests(BuildProducer<FilterBuildItem> filters, KeycloakRecorder recorder) {
         if (!acceptNonNormalizedPaths()) {
             filters.produce(new FilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
         }
