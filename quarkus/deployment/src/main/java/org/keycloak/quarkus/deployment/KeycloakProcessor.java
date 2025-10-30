@@ -123,7 +123,6 @@ import org.keycloak.quarkus.runtime.configuration.mappers.WildcardPropertyMapper
 import org.keycloak.quarkus.runtime.integration.resteasy.KeycloakHandlerChainCustomizer;
 import org.keycloak.quarkus.runtime.integration.resteasy.KeycloakTracingCustomizer;
 import org.keycloak.quarkus.runtime.logging.ClearMappedDiagnosticContextFilter;
-import org.keycloak.quarkus.runtime.services.RejectNonNormalizedPathFilter;
 import org.keycloak.quarkus.runtime.services.health.KeycloakClusterReadyHealthCheck;
 import org.keycloak.quarkus.runtime.services.health.KeycloakReadyHealthCheck;
 import org.keycloak.quarkus.runtime.storage.database.jpa.NamedJpaConnectionProviderFactory;
@@ -278,23 +277,22 @@ class KeycloakProcessor {
 
     @Record(ExecutionTime.STATIC_INIT)
     @BuildStep
+    @Consume(ConfigBuildItem.class)
     void filterAllRequests(BuildProducer<FilterBuildItem> filters, KeycloakRecorder recorder) {
-        if (!acceptNonNormalizedPaths()) {
-            filters.produce(new FilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
+        var filter = recorder.getRejectNonNormalizedPathFilter();
+        if (filter != null) {
+            filters.produce(new FilterBuildItem(filter, SecurityHandlerPriorities.CORS + 1));
         }
     }
 
     @Record(ExecutionTime.STATIC_INIT)
     @BuildStep(onlyIf = IsManagementEnabled.class)
-    void filterAllManagementRequests(BuildProducer<ManagementInterfaceFilterBuildItem> filters,
-                           KeycloakRecorder recorder) {
-        if (!acceptNonNormalizedPaths()) {
-            filters.produce(new ManagementInterfaceFilterBuildItem(new RejectNonNormalizedPathFilter(), SecurityHandlerPriorities.CORS + 1));
+    @Consume(ConfigBuildItem.class)
+    void filterAllManagementRequests(BuildProducer<ManagementInterfaceFilterBuildItem> filters, KeycloakRecorder recorder) {
+        var filter = recorder.getRejectNonNormalizedPathFilter();
+        if (filter != null) {
+            filters.produce(new ManagementInterfaceFilterBuildItem(filter, SecurityHandlerPriorities.CORS + 1));
         }
-    }
-
-    private static boolean acceptNonNormalizedPaths() {
-        return Configuration.isTrue(HttpOptions.HTTP_ACCEPT_NON_NORMALIZED_PATHS);
     }
 
     @Record(ExecutionTime.STATIC_INIT)
