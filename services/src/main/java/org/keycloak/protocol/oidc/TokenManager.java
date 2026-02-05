@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
@@ -410,10 +411,9 @@ public class TokenManager {
         if (realm.isRevokeRefreshToken()) {
             AuthenticatedClientSessionModel clientSession = validation.clientSessionCtx.getClientSession();
             try {
-                validateTokenReuse(session, realm, refreshToken, clientSession, true);
+                int newCount = validateTokenReuse(session, realm, refreshToken, clientSession, true);
                 String key = getReuseIdKey(refreshToken);
-                int currentCount = clientSession.getRefreshTokenUseCount(key);
-                clientSession.setRefreshTokenUseCount(key, currentCount + 1);
+                clientSession.setRefreshTokenUseCount(key, newCount);
             } catch (OAuthErrorException oee) {
                 if (logger.isDebugEnabled()) {
                     logger.debugf("Failed validation of refresh token %s due it was used before. Realm: %s, client: %s, user: %s, user session: %s. Will detach client session from user session",
@@ -426,7 +426,8 @@ public class TokenManager {
     }
 
     // Will throw OAuthErrorException if validation fails
-    public void validateTokenReuse(KeycloakSession session, RealmModel realm, AccessToken refreshToken, AuthenticatedClientSessionModel clientSession, boolean refreshFlag) throws OAuthErrorException {
+    // Will return how much times the refresh token reused in case the refreshFlag is true. Will return -1 if refreshFlag is false
+    public int validateTokenReuse(KeycloakSession session, RealmModel realm, AccessToken refreshToken, AuthenticatedClientSessionModel clientSession, boolean refreshFlag) throws OAuthErrorException {
         int startupTime = session.getProvider(UserSessionProvider.class).getStartupTime(realm);
         String key = getReuseIdKey(refreshToken);
         String refreshTokenId = clientSession.getRefreshToken(key);
@@ -442,7 +443,7 @@ public class TokenManager {
                 clientSession.setRefreshToken(key, refreshToken.getId());
                 clientSession.setRefreshTokenUseCount(key, 0);
             } else {
-                return;
+                return -1;
             }
         }
 
@@ -452,11 +453,29 @@ public class TokenManager {
                 "Maximum allowed refresh token reuse exceeded");
         }
 
-        // Attempt to add item into "single-use" cache to prevent possible concurrent requests with same refresh token
-        String singleUseCacheKey = "rt:" + key + ":" + currentCount;
-        if (!session.singleUseObjects().putIfAbsent(singleUseCacheKey, 60)) {
-            throw new OAuthErrorException(OAuthErrorException.INVALID_GRANT, "Maximum allowed refresh token reuse exceeded",
-                    "Maximum allowed refresh token reuse exceeded");
+        if (refreshFlag) {
+            // Put object into cache first
+            String singleUseCacheKey = "rt:" + refreshToken.getId();
+            session.singleUseObjects().putIfAbsent(singleUseCacheKey, 60);
+
+            // Replace the value in the store atomically and compare with the old value. If replace fails, it means other thread replaced in the meantime and we need to repeat
+            boolean replaced = false;
+            int newCount = currentCount + 1;
+            while (!replaced) {
+                Map<String, String> notes = session.singleUseObjects().get(singleUseCacheKey);
+                Map<String, String> newNotes = new ConcurrentHashMap<>(notes);
+                newCount = notes.containsKey("count") ? Integer.parseInt(notes.get("count")) + 1 : currentCount + 1;
+                newNotes.put("count", String.valueOf(newCount));
+                replaced = session.singleUseObjects().replace(singleUseCacheKey, notes, newNotes, 60);
+
+                if ((newCount - 1) > realm.getRefreshTokenMaxReuse()) {
+                    throw new OAuthErrorException(OAuthErrorException.INVALID_GRANT, "Maximum allowed refresh token reuse exceeded",
+                            "Maximum allowed refresh token reuse exceeded");
+                }
+            }
+            return newCount;
+        } else {
+            return -1;
         }
     }
 
