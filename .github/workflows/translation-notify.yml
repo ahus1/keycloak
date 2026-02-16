@@ -85,7 +85,7 @@ jobs:
               COMMENT+="### \`${lang_code}\`\n"
               COMMENT+="No maintainers configured for this language.\n\n"
             fi
-            COMMENT+="[Changes waiting for approval.](https://hosted.weblate.org/translate/keycloak/-/${lang_code}/?q=state:translated)\n"
+            COMMENT+="[Changes waiting for approval.](https://hosted.weblate.org/translate/keycloak/-/${lang_code}/?q=state:translated)\n\n"
           done
 
           # Post comment to PR
