@@ -484,7 +484,7 @@ public class RealmCacheSession implements CacheRealmProvider {
     }
 
     /**
-     * Cache that we've triggere an admin role invalidation in this session already.
+     * Cache that we've triggered an admin role invalidation in this session already.
      * This avoids loading the admin role again from the database
      */
     private boolean adminRoleInvalidated;
