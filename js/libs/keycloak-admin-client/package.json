@@ -39,7 +39,8 @@
     "generate:openapi": {
       "command": "cross-env OPENAPI_FILE=api.yml tsx generate.ts",
       "files": [
-        "api.yml"
+        "api.yml",
+        "generate.ts"
       ],
       "output": [
         "src/generated"
