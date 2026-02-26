@@ -19,7 +19,7 @@
     "lint": "wireit",
     "test": "wireit",
     "generate:openapi": "wireit",
-    "postinstall": "pnpm generate:openapi",
+    "postinstall": "rm -rf .wireit; pnpm generate:openapi",
     "prepublishOnly": "pnpm build"
   },
   "wireit": {
