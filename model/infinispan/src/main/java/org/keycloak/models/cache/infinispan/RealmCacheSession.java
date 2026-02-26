@@ -483,6 +483,8 @@ public class RealmCacheSession implements CacheRealmProvider {
         return adapter;
     }
 
+    private Set<String> containers;
+
     private RealmAdapter prepareCachedRealm(String id, KeycloakSession session) {
         CachedRealm cached = cache.get(id, CachedRealm.class);
         RealmAdapter adapter;
@@ -500,7 +502,10 @@ public class RealmCacheSession implements CacheRealmProvider {
                     ClientModel clientModel = session.clients().getClientByClientId(adminRealm, model.getName() + "-realm");
                     if (clientModel != null) {
                         RoleModel adminRole = adminRealm.getRole(AdminRoles.ADMIN);
-                        if (adminRole.getCompositesStream().noneMatch(r -> (r.isClientRole() && r.getContainerId().equals(clientModel.getId())))) {
+                        if (containers == null) {
+                            containers = adminRole.getCompositesStream().filter(RoleModel::isClientRole).map(RoleModel::getContainerId).collect(Collectors.toSet());
+                        }
+                        if (!containers.contains(clientModel.getId())) {
                             registerRoleInvalidation(adminRole.getId(), adminRole.getName(), adminRole.getContainerId());
                         }
                     }
