@@ -174,4 +174,9 @@ import { TextParseNodeFactory, TextSerializationWriterFactory } from "@microsoft
   }
 }
 
-void main();
+try {
+  void main();
+} catch (error) {
+  console.error("\n❌ Generation failed:", error);
+  process.exit(1);
+}
