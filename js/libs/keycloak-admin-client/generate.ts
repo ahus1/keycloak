@@ -71,7 +71,7 @@ async function main() {
 
   try {
     try {
-      const kiotaCmd = `npx @microsoft/kiota generate -l TypeScript -c ${CLIENT_CLASS_NAME} -n ${CLIENT_NAMESPACE} -d "${openApiFilePath}" -o "${OUTPUT_PATH}" --clean-output`;
+      const kiotaCmd = `pnpx @microsoft/kiota generate -l TypeScript -c ${CLIENT_CLASS_NAME} -n ${CLIENT_NAMESPACE} -d "${openApiFilePath}" -o "${OUTPUT_PATH}" --clean-output`;
       console.log(`\n🏃 Executing Kiota CLI...`);
       // stdio: "inherit" ensures Kiota's native logs print directly to your Jenkins console
       execSync(kiotaCmd, { stdio: "inherit" });
