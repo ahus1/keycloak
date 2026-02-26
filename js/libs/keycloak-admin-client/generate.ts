@@ -4,6 +4,7 @@ import { createRequire } from "module";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
+import { execSync } from "child_process";
 
 const require = createRequire(import.meta.url);
 const {
@@ -69,32 +70,18 @@ async function main() {
   console.log(`   Namespace: ${CLIENT_NAMESPACE}\n`);
 
   try {
-    const result = await generateClient({
-      openAPIFilePath: openApiFilePath,
-      clientClassName: CLIENT_CLASS_NAME,
-      clientNamespaceName: CLIENT_NAMESPACE,
-      language: KiotaGenerationLanguage.TypeScript,
-      outputPath: OUTPUT_PATH,
-      operation: ConsumerOperation.Generate,
-      workingDirectory: projectRoot,
-      cleanOutput: true,
-    });
+    try {
+      const kiotaCmd = `npx @microsoft/kiota generate -l TypeScript -c ${CLIENT_CLASS_NAME} -n ${CLIENT_NAMESPACE} -d "${openApiFilePath}" -o "${OUTPUT_PATH}" --clean-output`;
+      console.log(`\n🏃 Executing Kiota CLI...`);
+      // stdio: "inherit" ensures Kiota's native logs print directly to your Jenkins console
+      execSync(kiotaCmd, { stdio: "inherit" });
+      console.log("\n✅ Client generated successfully!");
+    } catch (error) {
+      console.error("\n❌ Generation failed:", error);
+      process.exit(1);
+    }
 
     console.log("\n✅ Client generation complete.");
-
-    if (result) {
-      console.log("\n✅ Client generated successfully!");
-
-      if (result.logs && result.logs.length > 0) {
-        console.log("\n📋 Generation logs:");
-        for (const log of result.logs) {
-          const level = log.level === 1 ? "⚠️" : log.level === 2 ? "❌" : "ℹ️";
-          console.log(`   ${level} ${log.message}`);
-        }
-      }
-    } else {
-      console.log("\n⚠️ Generation completed but returned no result");
-    }
   } catch (error) {
     console.error("\n❌ Generation failed:", error);
     process.exit(1);
