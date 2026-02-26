@@ -80,6 +80,8 @@ async function main() {
       cleanOutput: true,
     });
 
+    console.log("\n✅ Client generation complete.");
+
     if (result) {
       console.log("\n✅ Client generated successfully!");
 
