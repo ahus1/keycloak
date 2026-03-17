@@ -7,6 +7,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import org.keycloak.services.resources.KeycloakApplication;
+import org.keycloak.services.util.CacheControlUtil;
 
 import org.jboss.resteasy.reactive.server.ServerRequestFilter;
 
@@ -43,6 +44,7 @@ public class BootstrapFilter {
                 .entity("Boostrap in progress. Retry in " + retry + " seconds.")
                 .header(HttpHeaders.RETRY_AFTER, retry)
                 .header("Refresh", retry)
+                .cacheControl(CacheControlUtil.noCache())
                 .build();
 
     }
