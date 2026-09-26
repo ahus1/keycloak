@@ -131,6 +131,12 @@ public class InfinispanChangesUtils {
             logger.debugf("Existing entity in cache for key: %s . Will update it", key);
         }
 
+        if (existing.isLoadingMarker()) {
+            logger.debugf("Existing entity for key %s is a loading marker, removing it", key);
+            cacheHolder.cache().remove(key, existing);
+            return CompletableFutures.completedNull();
+        }
+
         // Apply updates on the existing entity and replace it
         task.runUpdate(existing.getEntity());
 

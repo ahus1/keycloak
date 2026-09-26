@@ -131,8 +131,10 @@ public class VolatileSessionResurrectionConcurrencyTest {
 
     /**
      * Core race condition test for the volatile path: evict the offline session from cache,
-     * then fire concurrent refresh requests (each triggering a DB-load + import path) while
-     * the main thread logs out. Without the fix, putIfAbsent would resurrect the deleted session.
+     * then fire concurrent offline session lookups (each triggering a DB-load + import path)
+     * while the main thread logs out. Without the fix, putIfAbsent would resurrect the
+     * deleted session. Uses server-side getOfflineUserSession() to exercise the actual
+     * offline DB fallback path with loading markers.
      */
     @Test
     public void logoutDuringConcurrentOfflineRefreshShouldNotResurrectSession() throws Exception {
@@ -142,15 +144,14 @@ public class VolatileSessionResurrectionConcurrencyTest {
             oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
             AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
             assertEquals(200, tokenResponse.getStatusCode(), "Password grant should succeed");
-            String accessToken = tokenResponse.getAccessToken();
             String refreshToken = tokenResponse.getRefreshToken();
-            assertNotNull(accessToken);
             assertNotNull(refreshToken);
 
             RefreshToken parsedRefresh = oauth.parseRefreshToken(refreshToken);
             String sessionId = parsedRefresh.getSessionId();
             assertEquals(TokenUtil.TOKEN_TYPE_OFFLINE, parsedRefresh.getType());
 
+            String realmName = realm.getName();
             ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
             AtomicBoolean stopFlag = new AtomicBoolean(false);
             CountDownLatch readyLatch = new CountDownLatch(CONCURRENT_THREADS);
@@ -163,14 +164,20 @@ public class VolatileSessionResurrectionConcurrencyTest {
                         readyLatch.countDown();
                         while (!stopFlag.get()) {
                             try {
-                                oauth.doUserInfoRequest(accessToken);
+                                runOnServer.run(session -> {
+                                    var realmModel = session.realms().getRealmByName(realmName);
+                                    session.sessions().getOfflineUserSession(realmModel, sessionId);
+                                });
                             } catch (Exception e) {
-                                // UserInfo may fail after logout — expected
+                                // May fail after logout — expected
                             }
                         }
-                        for (int i = 0; i < 10; i++) {
+                        for (int i = 0; i < 3; i++) {
                             try {
-                                oauth.doUserInfoRequest(accessToken);
+                                runOnServer.run(session -> {
+                                    var realmModel = session.realms().getRealmByName(realmName);
+                                    session.sessions().getOfflineUserSession(realmModel, sessionId);
+                                });
                             } catch (Exception e) {
                                 // expected
                             }

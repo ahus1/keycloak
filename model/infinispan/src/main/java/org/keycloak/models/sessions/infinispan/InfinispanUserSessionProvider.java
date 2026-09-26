@@ -337,9 +337,6 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         }
 
         UserSessionEntity sessionEntity = importUserSession(realm, persistentUserSession);
-        if (sessionEntity == null) {
-            persister.removeUserSession(sessionId, true);
-        }
         cleanupVolatileLoadingMarker(sessionId);
         return sessionEntity;
     }
