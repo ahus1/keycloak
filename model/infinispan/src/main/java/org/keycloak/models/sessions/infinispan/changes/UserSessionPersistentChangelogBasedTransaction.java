@@ -54,10 +54,10 @@ public class UserSessionPersistentChangelogBasedTransaction extends PersistentSe
             SessionEntityWrapper<UserSessionEntity> wrappedEntity = null;
             Cache<String, SessionEntityWrapper<UserSessionEntity>> cache = getCache(offline);
             if (cache != null) {
-                if (userSession != null) {
+                if (userSession != null && userSession.isOffline() == offline) {
                     // Bulk-query path: pre-loaded data from a stream query may be stale if a concurrent
                     // delete committed after the query. Check cache only — do not place a loading marker,
-                    // because the stale data must not be imported into the cache.comm
+                    // because the stale data must not be imported into the cache.
                     SessionEntityWrapper<UserSessionEntity> existing = cache.get(key);
                     if (existing != null && !existing.isLoadingMarker()) {
                         wrappedEntity = existing;
@@ -87,9 +87,12 @@ public class UserSessionPersistentChangelogBasedTransaction extends PersistentSe
                 if (hasStoredLoadingMarker(key, offline)) {
                     // We own the marker — load from DB and import into cache with CAS protection
                     wrappedEntity = getSessionEntityFromPersister(realm, key, userSession, offline);
-                } else {
+                } else if (cache != null) {
                     // Another thread's marker or bulk-query path — use data without caching
                     wrappedEntity = loadFromPersisterWithoutCaching(realm, key, userSession, offline);
+                } else {
+                    // No cache — importUserSession handles null cache via the session's own offline flag
+                    wrappedEntity = getSessionEntityFromPersister(realm, key, userSession, offline);
                 }
             }
 
