@@ -538,17 +538,11 @@ public class UserSessionProviderOfflineModelTest extends KeycloakModelTest {
             Assert.assertEquals(0, offlineUSCache.size());
             Assert.assertEquals(0, offlineCSCache.size());
 
-            // lazy load offline user sessions from DB => this should also import user and client sessions to the caches
+            // lazy load offline user sessions from DB
             Assert.assertEquals(2, session.sessions().getOfflineUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1")).count());
 
-            // check sessions were imported to the caches
-            Assert.assertEquals(2, offlineUSCache.size());
-            Assert.assertEquals(4, offlineCSCache.size());
-
-            // lifespan override set to 12h (43200s)
-            setTimeOffset(44000);
-
-            // check sessions were evicted from the caches
+            // Bulk-query streams (getOfflineUserSessionsStream by user) bind sessions to the transaction
+            // without importing into the cache, to avoid resurrecting concurrently deleted sessions.
             Assert.assertEquals(0, offlineUSCache.size());
             Assert.assertEquals(0, offlineCSCache.size());
 

@@ -132,7 +132,9 @@ public class InfinispanChangesUtils {
         }
 
         if (existing.isLoadingMarker()) {
-            // CAS-remove the marker to prevent the marker owner from writing stale data via replace(key, marker, data)
+            // CAS-remove the marker to prevent the marker owner from writing stale data via replace(key, marker, data).
+            // Return value intentionally ignored: if remove fails, the marker owner already replaced it with real data,
+            // and dropping this ADD_IF_ABSENT is correct since the "if absent" condition is no longer met.
             logger.debugf("Existing entity for key %s is a loading marker, CAS-removing to prevent stale import", key);
             cacheHolder.cache().remove(key, existing);
             return CompletableFutures.completedNull();

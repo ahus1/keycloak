@@ -508,8 +508,10 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
             return null;
         }
 
+        // Skip caching: the DB-loaded data may be stale if a concurrent detachFromUserSession committed
+        // after our DB read. Binding to the transaction without caching avoids resurrecting a deleted session.
         return importClientSession((UserSessionAdapter<?>) userSession, clientSession, getTransaction(true),
-                getClientSessionTransaction(true), true);
+                getClientSessionTransaction(true), true, false);
     }
 
     private AuthenticatedClientSessionEntity getClientSessionEntity(EmbeddedClientSessionKey key, boolean offline) {
@@ -879,7 +881,7 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
 
         InfinispanChangelogBasedTransaction<String, UserSessionEntity> userSessionUpdateTx = getTransaction(true);
         var clientSessionUpdateTx = getClientSessionTransaction(true);
-        AuthenticatedClientSessionAdapter offlineClientSession = importClientSession(userSessionAdapter, clientSession, userSessionUpdateTx, clientSessionUpdateTx, false);
+        AuthenticatedClientSessionAdapter offlineClientSession = importClientSession(userSessionAdapter, clientSession, userSessionUpdateTx, clientSessionUpdateTx, false, true);
         assert offlineClientSession != null; // no expiration checked, it is never null
 
         // update timestamp to current time
@@ -1008,7 +1010,7 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
     private AuthenticatedClientSessionAdapter importClientSession(UserSessionAdapter<?> sessionToImportInto, AuthenticatedClientSessionModel clientSession,
                                                                   InfinispanChangelogBasedTransaction<String, UserSessionEntity> userSessionUpdateTx,
                                                                   InfinispanChangelogBasedTransaction<EmbeddedClientSessionKey, AuthenticatedClientSessionEntity> clientSessionUpdateTx,
-                                                                  boolean checkExpiration) {
+                                                                  boolean checkExpiration, boolean cacheImport) {
         AuthenticatedClientSessionEntity entity = createAuthenticatedClientSessionInstance(clientSession,
                 sessionToImportInto.getRealm().getId(), clientSession.getClient().getId());
 
@@ -1027,7 +1029,7 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
 
 
         var key = new EmbeddedClientSessionKey(userSessionId, clientUUID);
-        clientSessionUpdateTx.addTask(key, Tasks.addIfAbsentSync(), entity, UserSessionModel.SessionPersistenceState.PERSISTENT);
+        clientSessionUpdateTx.addTask(key, cacheImport ? Tasks.addIfAbsentSync() : null, entity, UserSessionModel.SessionPersistenceState.PERSISTENT);
 
         sessionToImportInto.getEntity().getClientSessions().add(clientUUID);
 

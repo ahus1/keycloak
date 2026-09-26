@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.keycloak.OAuth2Constants;
 import org.keycloak.connections.infinispan.InfinispanConnectionProvider;
 import org.keycloak.models.UserSessionProvider;
 import org.keycloak.models.sessions.infinispan.InfinispanUserSessionProviderFactory;
@@ -401,6 +402,66 @@ public class SessionResurrectionConcurrencyTest {
                 "Refresh should succeed — loading marker must not cause crashes during REPLACE retry");
 
         oauth.doLogout(refreshToken);
+    }
+
+    /**
+     * Bulk-query streams (getOfflineUserSessionsStream by user) bind sessions to the
+     * transaction without importing into the Infinispan cache, to prevent resurrection
+     * of concurrently deleted sessions. Changes made to such transaction-bound sessions
+     * (e.g. setNote) must still be persisted to the database.
+     */
+    @Test
+    public void bulkQueryBindsToTransactionAndPersistsChanges() {
+        oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Evict the offline session from cache so the bulk query must load from DB
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class)
+                            .getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted offline user session %s from cache for bulk-query test", sessionId);
+        });
+
+        // Use the bulk-query stream to find the session and set a note on it
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var sessionUser = session.users().getUserByUsername(realmModel, "marker-test-user");
+            var userSession = session.sessions().getOfflineUserSessionsStream(realmModel, sessionUser)
+                    .filter(s -> s.getId().equals(sessionId))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Bulk query should return the offline session: " + sessionId));
+            userSession.setNote("bulk-query-note", "persisted-value");
+        });
+
+        // Evict again, then reload by ID to verify the note was persisted to the DB
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class)
+                            .getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+        });
+
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var userSession = session.sessions().getOfflineUserSession(realmModel, sessionId);
+            if (userSession == null) {
+                throw new AssertionError("Offline session should be loadable from DB after cache eviction: " + sessionId);
+            }
+            String noteValue = userSession.getNote("bulk-query-note");
+            if (!"persisted-value".equals(noteValue)) {
+                throw new AssertionError("Note set via bulk-query stream should be persisted to DB. " +
+                        "Expected 'persisted-value', got: " + noteValue);
+            }
+        });
+
+        oauth.doLogout(refreshToken);
+        oauth.scope(null);
     }
 
     public static class SessionCachingServerConfig implements KeycloakServerConfig {
