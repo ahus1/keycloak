@@ -188,7 +188,8 @@ public class InfinispanChangelogBasedTransaction<K, V extends SessionEntity> imp
                 InfinispanChangesUtils.runOperationInCluster(cacheHolder, entry.getKey(), merged, sessionWrapper, stage, logger);
 
                 // Persist REPLACE operations to DB for offline sessions (CREATE and REMOVE are handled directly by the provider)
-                if (persistToDatabaseCacheName != null && merged.getOperation() == SessionUpdateTask.CacheOperation.REPLACE) {
+                if (persistToDatabaseCacheName != null && merged.getOperation() == SessionUpdateTask.CacheOperation.REPLACE
+                        && updateTasks.stream().anyMatch(SessionUpdateTask::requiresDatabasePersistence)) {
                     if (persister == null) {
                         persister = new JpaChangesPerformer<>(persistToDatabaseCacheName);
                         databaseUpdates.accept(persister::write);
@@ -216,7 +217,6 @@ public class InfinispanChangelogBasedTransaction<K, V extends SessionEntity> imp
         return cacheHolder.keyGenerator().get();
     }
 
-    private static final long LOADING_MARKER_LIFESPAN_MS = 60_000;
 
     @SuppressWarnings("unchecked")
     private Map<Object, SessionEntityWrapper<?>> getOrCreateVolatileLoadingMarkers() {
@@ -234,7 +234,7 @@ public class InfinispanChangelogBasedTransaction<K, V extends SessionEntity> imp
         for (var entry : sessions.entrySet()) {
             K key = entry.getKey();
             SessionEntityWrapper<V> marker = SessionEntityWrapper.createLoadingMarker(entry.getValue().getEntity());
-            SessionEntityWrapper<V> existing = cacheHolder.cache().putIfAbsent(key, marker, LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
+            SessionEntityWrapper<V> existing = cacheHolder.cache().putIfAbsent(key, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
             if (existing == null) {
                 markers.put(key, marker);
             }

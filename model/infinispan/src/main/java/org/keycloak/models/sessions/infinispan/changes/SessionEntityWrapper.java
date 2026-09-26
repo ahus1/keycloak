@@ -40,6 +40,7 @@ import org.infinispan.protostream.annotations.ProtoTypeId;
 public class SessionEntityWrapper<S extends SessionEntity> {
 
     private static final String LOADING_MARKER_KEY = "loading";
+    public static final long LOADING_MARKER_LIFESPAN_MS = 60_000;
 
     private final UUID version;
     private final S entity;

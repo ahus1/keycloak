@@ -29,6 +29,8 @@ import org.keycloak.connections.infinispan.InfinispanConnectionProvider;
 import org.keycloak.models.UserSessionProvider;
 import org.keycloak.models.sessions.infinispan.InfinispanUserSessionProviderFactory;
 import org.keycloak.models.sessions.infinispan.changes.SessionEntityWrapper;
+import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionEntity;
+import org.keycloak.models.sessions.infinispan.entities.EmbeddedClientSessionKey;
 import org.keycloak.models.sessions.infinispan.entities.UserSessionEntity;
 import org.keycloak.representations.RefreshToken;
 import org.keycloak.representations.idm.UserSessionRepresentation;
@@ -213,6 +215,190 @@ public class SessionResurrectionConcurrencyTest {
 
         assertEquals(200, oauth.doRefreshTokenRequest(refreshToken).getStatusCode(),
                 "Refresh should succeed — loading marker must be treated as cache miss, session loaded from DB");
+
+        oauth.doLogout(refreshToken);
+    }
+
+    /**
+     * When multiple readers hit a cache miss simultaneously (no delete happening),
+     * all should succeed. One reader's CAS replace succeeds; others find the data
+     * already cached and use it.
+     */
+    @Test
+    public void concurrentReadersWithoutDeleteShouldAllSucceed() throws Exception {
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String accessToken = tokenResponse.getAccessToken();
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+
+        // Evict user session to force all readers to hit DB
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted user session %s from cache", sessionId);
+        });
+
+        // Fire concurrent userinfo requests — all hit cache miss simultaneously
+        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
+        CountDownLatch startLatch = new CountDownLatch(CONCURRENT_THREADS);
+        CountDownLatch doneLatch = new CountDownLatch(CONCURRENT_THREADS);
+        List<Throwable> errors = new CopyOnWriteArrayList<>();
+
+        for (int t = 0; t < CONCURRENT_THREADS; t++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.countDown();
+                    startLatch.await(10, TimeUnit.SECONDS);
+                    oauth.doUserInfoRequest(accessToken);
+                } catch (Throwable e) {
+                    errors.add(e);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        doneLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertTrue(errors.isEmpty(), "No errors expected during concurrent reads");
+
+        // Session should still work after concurrent reads
+        assertEquals(200, oauth.doRefreshTokenRequest(refreshToken).getStatusCode(),
+                "Refresh should succeed — session must be correctly recovered from DB");
+
+        oauth.doLogout(refreshToken);
+    }
+
+    /**
+     * Verifies that a session note update is persisted to the database.
+     * After setting a note and clearing the cache, reloading the session
+     * from DB should still have the note.
+     */
+    @Test
+    public void sessionNoteUpdatePersistedToDatabase() {
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Set a session note
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var userSession = session.sessions().getUserSession(realmModel, sessionId);
+            if (userSession == null) {
+                throw new AssertionError("User session should exist: " + sessionId);
+            }
+            userSession.setNote("test-note", "test-value");
+        });
+
+        // Evict from cache to force DB load
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted user session %s from cache", sessionId);
+        });
+
+        // Reload session — should come from DB with the note
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var userSession = session.sessions().getUserSession(realmModel, sessionId);
+            if (userSession == null) {
+                throw new AssertionError("User session should be loadable from DB after cache eviction: " + sessionId);
+            }
+            String noteValue = userSession.getNote("test-note");
+            if (!"test-value".equals(noteValue)) {
+                throw new AssertionError("Session note should be persisted to DB and survive cache eviction. " +
+                        "Expected 'test-value', got: " + noteValue);
+            }
+        });
+
+        oauth.doLogout(refreshToken);
+    }
+
+    /**
+     * Verifies that evicting a client session from cache doesn't break the session.
+     * The client session should be recoverable from the database.
+     */
+    @Test
+    public void clientSessionEvictionRecovery() {
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+
+        // Verify refresh works before eviction
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode(), "Refresh should succeed before eviction");
+        refreshToken = refreshResponse.getRefreshToken();
+
+        // Evict the client session from cache
+        String realmName = realm.getName();
+        String oauthClientId = "marker-test-client";
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var client = realmModel.getClientByClientId(oauthClientId);
+            Cache<EmbeddedClientSessionKey, SessionEntityWrapper<AuthenticatedClientSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME);
+            EmbeddedClientSessionKey key = new EmbeddedClientSessionKey(sessionId, client.getId());
+            cache.remove(key);
+            LOG.debugf("Evicted client session for userSession=%s client=%s", sessionId, client.getId());
+        });
+
+        // Refresh should still work — client session recovered from DB
+        refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode(),
+                "Refresh should succeed — client session must be recoverable from DB after cache eviction");
+
+        oauth.doLogout(refreshResponse.getRefreshToken());
+    }
+
+    /**
+     * Queues a session REPLACE update, then injects a loading marker into the cache.
+     * When the transaction commits, the REPLACE CAS fails (version mismatch with marker),
+     * and handleReplaceResponse detects the loading marker and skips the retry instead
+     * of corrupting the marker entity with update data.
+     */
+    @Test
+    public void replaceOnLoadingMarkerIsSkipped() {
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Inside a single server-side transaction:
+        // 1. Look up the session (adds to transaction with version V1)
+        // 2. Set a note (queues a REPLACE update task)
+        // 3. Overwrite the cache entry with a loading marker (version V2)
+        // When the transaction commits, the REPLACE CAS fails (V1 != V2),
+        // handleReplaceResponse detects the loading marker and skips the retry.
+        runOnServer.run(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            var userSession = session.sessions().getUserSession(realmModel, sessionId);
+            if (userSession == null) {
+                throw new AssertionError("Session should exist: " + sessionId);
+            }
+            userSession.setNote("test-replace", "value");
+
+            String realmId = realmModel.getId();
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.USER_SESSION_CACHE_NAME);
+            UserSessionEntity entity = new UserSessionEntity(sessionId);
+            entity.setRealmId(realmId);
+            SessionEntityWrapper<UserSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(entity);
+            cache.put(sessionId, marker, 30, TimeUnit.SECONDS);
+            LOG.debugf("Injected loading marker for session %s before transaction commit", sessionId);
+        });
+
+        // Session should still be loadable from DB despite the marker
+        assertEquals(200, oauth.doRefreshTokenRequest(refreshToken).getStatusCode(),
+                "Refresh should succeed — loading marker must not cause crashes during REPLACE retry");
 
         oauth.doLogout(refreshToken);
     }

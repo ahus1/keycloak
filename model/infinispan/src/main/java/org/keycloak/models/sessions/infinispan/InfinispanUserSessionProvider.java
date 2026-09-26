@@ -250,7 +250,6 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         return null;
     }
 
-    private static final long LOADING_MARKER_LIFESPAN_MS = 60_000;
 
     @SuppressWarnings("unchecked")
     private Map<Object, SessionEntityWrapper<?>> getOrCreateVolatileLoadingMarkers() {
@@ -267,7 +266,7 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         UserSessionEntity markerEntity = new UserSessionEntity(sessionId);
         markerEntity.setRealmId(realm.getId());
         SessionEntityWrapper<UserSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(markerEntity);
-        SessionEntityWrapper<UserSessionEntity> existing = cache.putIfAbsent(sessionId, marker, LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
+        SessionEntityWrapper<UserSessionEntity> existing = cache.putIfAbsent(sessionId, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
 
         if (existing == null) {
             getOrCreateVolatileLoadingMarkers().put(sessionId, marker);
@@ -340,15 +339,8 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         UserSessionEntity sessionEntity = importUserSession(realm, persistentUserSession);
         if (sessionEntity == null) {
             persister.removeUserSession(sessionId, true);
-            cleanupVolatileLoadingMarker(sessionId);
-            return null;
         }
-
-        if (!wasMarkerConsumed(sessionId)) {
-            cleanupVolatileLoadingMarker(sessionId);
-            return null;
-        }
-
+        cleanupVolatileLoadingMarker(sessionId);
         return sessionEntity;
     }
 
@@ -364,16 +356,7 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         }
 
         UserSessionEntity sessionEntity = importUserSession(realm, persistentUserSession);
-        if (sessionEntity == null) {
-            cleanupVolatileLoadingMarker(sessionId);
-            return null;
-        }
-
-        if (!wasMarkerConsumed(sessionId)) {
-            cleanupVolatileLoadingMarker(sessionId);
-            return null;
-        }
-
+        cleanupVolatileLoadingMarker(sessionId);
         return sessionEntity;
     }
 
@@ -404,6 +387,11 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
             clientTx.cleanupLoadingMarkers(clientSessionsById);
             log.debugf("The user-session already imported by another transaction for sessionId=%s offline=true", sessionId);
             return existing;
+        }
+
+        if (!wasMarkerConsumed(sessionId)) {
+            clientTx.cleanupLoadingMarkers(clientSessionsById);
+            return null;
         }
 
         log.debugf("Attempting to import the client-sessions for user-session with sessionId=%s offline=true", sessionId);

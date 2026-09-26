@@ -80,7 +80,6 @@ abstract public class PersistentSessionsChangelogBasedTransaction<K, V extends S
         return offline ? offlineUpdates : updates;
     }
 
-    protected static final long LOADING_MARKER_LIFESPAN_MS = 60_000;
 
     protected record DeferredRemove<K, V extends SessionEntity>(CacheHolder<K, V> cacheHolder, K key, boolean offline) {}
 
@@ -116,7 +115,7 @@ abstract public class PersistentSessionsChangelogBasedTransaction<K, V extends S
         for (var entry : sessions.entrySet()) {
             K key = entry.getKey();
             SessionEntityWrapper<V> marker = SessionEntityWrapper.createLoadingMarker(entry.getValue().getEntity());
-            SessionEntityWrapper<V> existing = cache.putIfAbsent(key, marker, LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
+            SessionEntityWrapper<V> existing = cache.putIfAbsent(key, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
             if (existing == null) {
                 storeLoadingMarker(key, marker, offline);
             }
@@ -297,7 +296,7 @@ abstract public class PersistentSessionsChangelogBasedTransaction<K, V extends S
     private void lookupAndAndExecuteTask(K key, PersistentSessionUpdateTask<V> task) {
         // Lookup entity from cache
         SessionEntityWrapper<V> wrappedEntity = getCache(task.isOffline()).get(key);
-        if (wrappedEntity == null) {
+        if (wrappedEntity == null || wrappedEntity.isLoadingMarker()) {
             LOG.tracef("Not present cache item for key %s", key);
             return;
         }

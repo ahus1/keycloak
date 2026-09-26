@@ -67,7 +67,6 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
                 .forEach(authenticatedClientSessionEntity -> authenticatedClientSessionEntity.setUserSessionId(userSessionId));
     }
 
-    private static final long LOADING_MARKER_LIFESPAN_MS = 60_000;
 
     public SessionEntityWrapper<AuthenticatedClientSessionEntity> get(RealmModel realm, ClientModel client, UserSessionModel userSession, EmbeddedClientSessionKey key, boolean offline) {
         if (key == null) {
@@ -81,7 +80,7 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
                 AuthenticatedClientSessionEntity markerEntity = new AuthenticatedClientSessionEntity();
                 markerEntity.setRealmId(realm.getId());
                 SessionEntityWrapper<AuthenticatedClientSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(markerEntity);
-                SessionEntityWrapper<AuthenticatedClientSessionEntity> existing = cache.putIfAbsent(key, marker, LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
+                SessionEntityWrapper<AuthenticatedClientSessionEntity> existing = cache.putIfAbsent(key, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
 
                 if (existing == null) {
                     storeLoadingMarker(key, marker, offline);

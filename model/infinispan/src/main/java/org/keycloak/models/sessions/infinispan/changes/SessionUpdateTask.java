@@ -32,6 +32,10 @@ public interface SessionUpdateTask<S extends SessionEntity> {
 
     CacheOperation getOperation();
 
+    default boolean requiresDatabasePersistence() {
+        return true;
+    }
+
     enum CacheOperation {
 
         ADD,

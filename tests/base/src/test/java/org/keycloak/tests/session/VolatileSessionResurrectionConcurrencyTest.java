@@ -29,6 +29,8 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.common.Profile;
 import org.keycloak.connections.infinispan.InfinispanConnectionProvider;
 import org.keycloak.models.sessions.infinispan.changes.SessionEntityWrapper;
+import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionEntity;
+import org.keycloak.models.sessions.infinispan.entities.EmbeddedClientSessionKey;
 import org.keycloak.models.sessions.infinispan.entities.UserSessionEntity;
 import org.keycloak.representations.RefreshToken;
 import org.keycloak.testframework.annotations.InjectRealm;
@@ -296,6 +298,250 @@ public class VolatileSessionResurrectionConcurrencyTest {
         });
 
         oauth.doLogout(refreshToken);
+        oauth.scope(null);
+    }
+
+    /**
+     * When multiple readers hit a cache miss simultaneously (without any delete),
+     * all should succeed. One reader's CAS replace succeeds; others find the data
+     * already cached or fall back to loading without caching.
+     */
+    @Test
+    public void concurrentOfflineReadersWithoutDeleteShouldAllSucceed() throws Exception {
+        oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Evict offline session from cache
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted offline user session %s from cache", sessionId);
+        });
+
+        // Concurrent offline session lookups via independent server-side sessions
+        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
+        CountDownLatch startLatch = new CountDownLatch(CONCURRENT_THREADS);
+        CountDownLatch doneLatch = new CountDownLatch(CONCURRENT_THREADS);
+        List<Throwable> errors = new CopyOnWriteArrayList<>();
+
+        for (int t = 0; t < CONCURRENT_THREADS; t++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.countDown();
+                    startLatch.await(10, TimeUnit.SECONDS);
+                    runOnServer.run(session -> {
+                        var realmModel = session.realms().getRealmByName(realmName);
+                        var offlineSession = session.sessions().getOfflineUserSession(realmModel, sessionId);
+                        if (offlineSession == null) {
+                            throw new AssertionError("Offline session should be loadable from DB: " + sessionId);
+                        }
+                    });
+                } catch (Throwable e) {
+                    errors.add(e);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        doneLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertTrue(errors.isEmpty(), "All concurrent offline session lookups should succeed");
+
+        // Session should still be usable
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode(),
+                "Offline refresh should succeed after concurrent reads");
+
+        oauth.doLogout(refreshResponse.getRefreshToken());
+        oauth.scope(null);
+    }
+
+    /**
+     * Concurrent imports of the same offline session should not leave orphaned loading
+     * markers in the client session cache. This exercises the client marker cleanup path
+     * in importUserSession() when a user session CAS fails.
+     */
+    @Test
+    public void noOrphanedClientSessionMarkersAfterConcurrentImport() throws Exception {
+        oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Evict offline user session from cache to force DB reimport
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted offline user session %s from cache", sessionId);
+        });
+
+        // Concurrent offline session lookups — each triggers importUserSession with client session markers
+        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
+        CountDownLatch startLatch = new CountDownLatch(CONCURRENT_THREADS);
+        CountDownLatch doneLatch = new CountDownLatch(CONCURRENT_THREADS);
+        List<Throwable> errors = new CopyOnWriteArrayList<>();
+
+        for (int t = 0; t < CONCURRENT_THREADS; t++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.countDown();
+                    startLatch.await(10, TimeUnit.SECONDS);
+                    runOnServer.run(session -> {
+                        var realmModel = session.realms().getRealmByName(realmName);
+                        session.sessions().getOfflineUserSession(realmModel, sessionId);
+                    });
+                } catch (Throwable e) {
+                    errors.add(e);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        doneLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertTrue(errors.isEmpty(), "Concurrent imports should not error");
+
+        // Verify no orphaned loading markers in the offline client session cache
+        runOnServer.run(session -> {
+            Cache<EmbeddedClientSessionKey, SessionEntityWrapper<AuthenticatedClientSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.OFFLINE_CLIENT_SESSION_CACHE_NAME);
+            for (var entry : cache.entrySet()) {
+                if (entry.getKey().userSessionId().equals(sessionId) && entry.getValue().isLoadingMarker()) {
+                    throw new AssertionError("Orphaned loading marker found for client session: " + entry.getKey());
+                }
+            }
+        });
+
+        // Session should still be usable
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode());
+
+        oauth.doLogout(refreshResponse.getRefreshToken());
+        oauth.scope(null);
+    }
+
+    /**
+     * Triggers a bulk admin API query for offline sessions while another thread is importing
+     * the same sessions. Exercises the getOfflineUserSessionsStream() path with marker contention
+     * from concurrent getUserSessionEntityFromCacheOrImportIfNecessary() calls.
+     */
+    @Test
+    public void bulkOfflineSessionQueryWithConcurrentImport() throws Exception {
+        oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+        String oauthClientId = "volatile-marker-test-client";
+
+        // Get the client UUID for the admin API call
+        String clientUUID = runOnServer.fetch(session -> {
+            var realmModel = session.realms().getRealmByName(realmName);
+            return realmModel.getClientByClientId(oauthClientId).getId();
+        }, String.class);
+
+        // Evict offline user session from cache
+        runOnServer.run(session -> {
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            cache.remove(sessionId);
+            LOG.debugf("Evicted offline user session %s from cache", sessionId);
+        });
+
+        // Fire concurrent bulk queries and direct lookups
+        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_THREADS);
+        CountDownLatch startLatch = new CountDownLatch(CONCURRENT_THREADS);
+        CountDownLatch doneLatch = new CountDownLatch(CONCURRENT_THREADS);
+        List<Throwable> errors = new CopyOnWriteArrayList<>();
+
+        for (int t = 0; t < CONCURRENT_THREADS; t++) {
+            final int thread = t;
+            executor.submit(() -> {
+                try {
+                    startLatch.countDown();
+                    startLatch.await(10, TimeUnit.SECONDS);
+                    if (thread % 2 == 0) {
+                        user.admin().getOfflineSessions(clientUUID);
+                    } else {
+                        runOnServer.run(session -> {
+                            var realmModel = session.realms().getRealmByName(realmName);
+                            session.sessions().getOfflineUserSession(realmModel, sessionId);
+                        });
+                    }
+                } catch (Throwable e) {
+                    errors.add(e);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        doneLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertTrue(errors.isEmpty(), "Concurrent bulk queries and imports should not error");
+
+        // Session should still be usable
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode());
+
+        oauth.doLogout(refreshResponse.getRefreshToken());
+        oauth.scope(null);
+    }
+
+    /**
+     * Place a loading marker with a very short TTL, wait for it to expire, then access
+     * the session. The expired marker means the cache slot is empty, so a new reader can
+     * place a fresh marker and load from DB. This simulates recovery after a reader crashes
+     * without consuming its marker.
+     */
+    @Test
+    public void loadingMarkerExpiryRecovery() throws Exception {
+        oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest(user.getUsername(), "password");
+        assertEquals(200, tokenResponse.getStatusCode());
+        String refreshToken = tokenResponse.getRefreshToken();
+        String sessionId = oauth.parseRefreshToken(refreshToken).getSessionId();
+        String realmName = realm.getName();
+
+        // Place a loading marker with a very short TTL (1 second)
+        runOnServer.run(session -> {
+            String realmId = session.realms().getRealmByName(realmName).getId();
+            Cache<String, SessionEntityWrapper<UserSessionEntity>> cache =
+                    session.getProvider(InfinispanConnectionProvider.class).getCache(InfinispanConnectionProvider.OFFLINE_USER_SESSION_CACHE_NAME);
+            UserSessionEntity entity = new UserSessionEntity(sessionId);
+            entity.setRealmId(realmId);
+            SessionEntityWrapper<UserSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(entity);
+            cache.put(sessionId, marker, 1, TimeUnit.SECONDS);
+            LOG.debugf("Injected loading marker with 1s TTL for offline session %s", sessionId);
+        });
+
+        // Wait for the marker to expire
+        Thread.sleep(1500);
+
+        // Session should still be loadable — expired marker means cache slot is empty,
+        // new reader can place a fresh marker and load from DB
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(refreshToken);
+        assertEquals(200, refreshResponse.getStatusCode(),
+                "Offline refresh should succeed — expired marker should not prevent session recovery");
+
+        oauth.doLogout(refreshResponse.getRefreshToken());
         oauth.scope(null);
     }
 

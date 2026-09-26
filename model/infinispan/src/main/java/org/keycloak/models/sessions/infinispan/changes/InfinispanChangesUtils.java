@@ -184,6 +184,11 @@ public class InfinispanChangesUtils {
             return CompletableFutures.completedNull();
         }
 
+        if (returnValue.isLoadingMarker()) {
+            logger.debugf("Entity %s is a loading marker. Replace task will be ignored", key);
+            return CompletableFutures.completedNull();
+        }
+
         if (returnValue.getVersion().equals(newSession.getVersion())) {
             if (logger.isTraceEnabled()) {
                 logger.tracef("Replace SUCCESS for entity: %s . old version: %s, new version: %s, Lifespan: %d ms, MaxIdle: %d ms", key, expectedSession.getVersion(), newSession.getVersion(), task.getLifespanMs(), task.getMaxIdleTimeMs());
