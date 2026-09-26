@@ -261,6 +261,10 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         return markers;
     }
 
+    /**
+     * @return {@code null} if this thread placed the marker (owns it),
+     *         a loading marker if another thread is loading, or the real cached entity.
+     */
     private SessionEntityWrapper<UserSessionEntity> placeLoadingMarker(RealmModel realm, String sessionId) {
         Cache<String, SessionEntityWrapper<UserSessionEntity>> cache = getTransaction(true).getCache();
         UserSessionEntity markerEntity = new UserSessionEntity(sessionId);
@@ -299,6 +303,8 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         return loadUserSessionEntityWithoutCaching(realm, persistentUserSession);
     }
 
+    // Binds the session to the transaction for use within the current request,
+    // but does not put it in the Infinispan cache.
     private UserSessionEntity loadUserSessionEntityWithoutCaching(RealmModel realm, UserSessionModel persistentUserSession) {
         UserSessionEntity entity = UserSessionEntity.createFromModel(persistentUserSession);
 
@@ -316,17 +322,22 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         return entity;
     }
 
+    // Single-session lookup: places a loading marker to prevent concurrent reads
+    // from resurrecting a deleted session via cache import.
     private UserSessionEntity getUserSessionEntityFromPersistenceProvider(RealmModel realm, String sessionId) {
         log.debugf("Offline user-session not found in infinispan, attempting UserSessionPersisterProvider lookup for sessionId=%s", sessionId);
 
         SessionEntityWrapper<UserSessionEntity> existingData = placeLoadingMarker(realm, sessionId);
         if (existingData != null) {
             if (existingData.isLoadingMarker()) {
+                // Another thread is loading this session — read from DB without caching to avoid contention
+                log.debugf("Loading marker found for sessionId=%s, loading from DB without caching", sessionId);
                 return loadUserSessionEntityWithoutCaching(realm, sessionId);
             }
             return existingData.getEntity();
         }
 
+        // We own the marker — load from DB and import with CAS protection
         UserSessionPersisterProvider persister = session.getProvider(UserSessionPersisterProvider.class);
         UserSessionModel persistentUserSession = persister.loadUserSession(realm, sessionId, true);
 
@@ -341,20 +352,18 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         return sessionEntity;
     }
 
+    // Called from bulk-query streams with pre-loaded DB data. Skips marker placement
+    // to avoid importing potentially stale data into the cache after a concurrent delete.
     private UserSessionEntity getUserSessionEntityFromCacheOrImportIfNecessary(RealmModel realm, UserSessionModel persistentUserSession) {
         String sessionId = persistentUserSession.getId();
 
-        SessionEntityWrapper<UserSessionEntity> existingData = placeLoadingMarker(realm, sessionId);
-        if (existingData != null) {
-            if (existingData.isLoadingMarker()) {
-                return loadUserSessionEntityWithoutCaching(realm, persistentUserSession);
-            }
-            return existingData.getEntity();
+        UserSessionEntity cached = getUserSessionEntity(realm, sessionId, true);
+        if (cached != null) {
+            return cached;
         }
 
-        UserSessionEntity sessionEntity = importUserSession(realm, persistentUserSession);
-        cleanupVolatileLoadingMarker(sessionId);
-        return sessionEntity;
+        log.debugf("Offline user-session not in cache for sessionId=%s, using pre-loaded data without caching", sessionId);
+        return loadUserSessionEntityWithoutCaching(realm, persistentUserSession);
     }
 
     private UserSessionEntity importUserSession(RealmModel realm, UserSessionModel persistentUserSession) {
@@ -387,6 +396,8 @@ public class InfinispanUserSessionProvider implements UserSessionProvider, Sessi
         }
 
         if (!wasMarkerConsumed(sessionId)) {
+            // CAS replace failed — a concurrent delete or another thread consumed the marker.
+            // Don't import client sessions for a user session that wasn't successfully cached.
             clientTx.cleanupLoadingMarkers(clientSessionsById);
             return null;
         }

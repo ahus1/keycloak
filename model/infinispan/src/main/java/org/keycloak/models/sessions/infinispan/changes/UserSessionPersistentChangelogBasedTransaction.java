@@ -54,25 +54,41 @@ public class UserSessionPersistentChangelogBasedTransaction extends PersistentSe
             SessionEntityWrapper<UserSessionEntity> wrappedEntity = null;
             Cache<String, SessionEntityWrapper<UserSessionEntity>> cache = getCache(offline);
             if (cache != null) {
-                UserSessionEntity markerEntity = new UserSessionEntity(key);
-                markerEntity.setRealmId(realm.getId());
-                SessionEntityWrapper<UserSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(markerEntity);
-                SessionEntityWrapper<UserSessionEntity> existing = cache.putIfAbsent(key, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
+                if (userSession != null) {
+                    // Bulk-query path: pre-loaded data from a stream query may be stale if a concurrent
+                    // delete committed after the query. Check cache only — do not place a loading marker,
+                    // because the stale data must not be imported into the cache.comm
+                    SessionEntityWrapper<UserSessionEntity> existing = cache.get(key);
+                    if (existing != null && !existing.isLoadingMarker()) {
+                        wrappedEntity = existing;
+                        getUpdates(offline).putIfAbsent(key, new SessionUpdatesList<>(realm, wrappedEntity));
+                        LOG.debugf("user-session found in cache for sessionId=%s offline=%s %s", key, offline, wrappedEntity.getEntity().getLastSessionRefresh());
+                    }
+                } else {
+                    // Single-session lookup: place a loading marker to prevent concurrent reads
+                    // from resurrecting a deleted session via cache import.
+                    UserSessionEntity markerEntity = new UserSessionEntity(key);
+                    markerEntity.setRealmId(realm.getId());
+                    SessionEntityWrapper<UserSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(markerEntity);
+                    SessionEntityWrapper<UserSessionEntity> existing = cache.putIfAbsent(key, marker, SessionEntityWrapper.LOADING_MARKER_LIFESPAN_MS, TimeUnit.MILLISECONDS);
 
-                if (existing == null) {
-                    storeLoadingMarker(key, marker, offline);
-                } else if (!existing.isLoadingMarker()) {
-                    wrappedEntity = existing;
-                    getUpdates(offline).putIfAbsent(key, new SessionUpdatesList<>(realm, wrappedEntity));
-                    LOG.debugf("user-session found in cache for sessionId=%s offline=%s %s", key, offline, wrappedEntity.getEntity().getLastSessionRefresh());
+                    if (existing == null) {
+                        storeLoadingMarker(key, marker, offline);
+                    } else if (!existing.isLoadingMarker()) {
+                        wrappedEntity = existing;
+                        getUpdates(offline).putIfAbsent(key, new SessionUpdatesList<>(realm, wrappedEntity));
+                        LOG.debugf("user-session found in cache for sessionId=%s offline=%s %s", key, offline, wrappedEntity.getEntity().getLastSessionRefresh());
+                    }
                 }
             }
 
             if (wrappedEntity == null) {
                 LOG.debugf("user-session not found in cache for sessionId=%s offline=%s, loading from persister", key, offline);
                 if (hasStoredLoadingMarker(key, offline)) {
+                    // We own the marker — load from DB and import into cache with CAS protection
                     wrappedEntity = getSessionEntityFromPersister(realm, key, userSession, offline);
                 } else {
+                    // Another thread's marker or bulk-query path — use data without caching
                     wrappedEntity = loadFromPersisterWithoutCaching(realm, key, userSession, offline);
                 }
             }

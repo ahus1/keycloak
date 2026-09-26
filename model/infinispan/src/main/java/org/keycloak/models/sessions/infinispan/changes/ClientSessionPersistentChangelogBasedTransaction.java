@@ -77,6 +77,8 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
             SessionEntityWrapper<AuthenticatedClientSessionEntity> wrappedEntity = null;
             Cache<EmbeddedClientSessionKey, SessionEntityWrapper<AuthenticatedClientSessionEntity>> cache = getCache(offline);
             if (cache != null) {
+                // Place a loading marker to prevent concurrent reads from resurrecting
+                // a deleted client session via cache import.
                 AuthenticatedClientSessionEntity markerEntity = new AuthenticatedClientSessionEntity();
                 markerEntity.setRealmId(realm.getId());
                 SessionEntityWrapper<AuthenticatedClientSessionEntity> marker = SessionEntityWrapper.createLoadingMarker(markerEntity);
@@ -95,8 +97,10 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
                 LOG.tracef("Client-session not found in cache, loading from persister. userSessionId=%s, clientSessionId=%s, clientId=%s, offline=%s",
                         userSession.getId(), key, client.getId(), offline);
                 if (hasStoredLoadingMarker(key, offline)) {
+                    // We own the marker — load from DB and import into cache with CAS protection
                     wrappedEntity = getSessionEntityFromPersister(realm, client, userSession, key, offline);
                 } else {
+                    // Another thread's marker — use data without caching
                     wrappedEntity = loadClientSessionFromPersisterWithoutCaching(realm, client, userSession, key, offline);
                 }
             }

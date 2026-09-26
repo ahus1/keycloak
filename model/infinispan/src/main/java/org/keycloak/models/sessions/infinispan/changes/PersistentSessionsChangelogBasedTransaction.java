@@ -294,10 +294,10 @@ abstract public class PersistentSessionsChangelogBasedTransaction<K, V extends S
     }
 
     private void lookupAndAndExecuteTask(K key, PersistentSessionUpdateTask<V> task) {
-        // Lookup entity from cache
         SessionEntityWrapper<V> wrappedEntity = getCache(task.isOffline()).get(key);
         if (wrappedEntity == null || wrappedEntity.isLoadingMarker()) {
-            LOG.tracef("Not present cache item for key %s", key);
+            // Session not in cache or being loaded from DB — skip task
+            LOG.tracef("Not present or loading cache item for key %s", key);
             return;
         }
         // Cache does not contain the offline flag value so adding it

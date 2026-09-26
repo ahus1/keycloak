@@ -132,7 +132,8 @@ public class InfinispanChangesUtils {
         }
 
         if (existing.isLoadingMarker()) {
-            logger.debugf("Existing entity for key %s is a loading marker, removing it", key);
+            // CAS-remove the marker to prevent the marker owner from writing stale data via replace(key, marker, data)
+            logger.debugf("Existing entity for key %s is a loading marker, CAS-removing to prevent stale import", key);
             cacheHolder.cache().remove(key, existing);
             return CompletableFutures.completedNull();
         }
@@ -191,7 +192,8 @@ public class InfinispanChangesUtils {
         }
 
         if (returnValue.isLoadingMarker()) {
-            logger.debugf("Entity %s is a loading marker. Replace task will be ignored", key);
+            // Skip replace to avoid applying updates to the marker's minimal entity
+            logger.debugf("Entity %s is a loading marker, skipping replace to avoid updating marker entity", key);
             return CompletableFutures.completedNull();
         }
 
