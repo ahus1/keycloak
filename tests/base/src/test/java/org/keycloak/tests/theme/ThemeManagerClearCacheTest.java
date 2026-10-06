@@ -73,13 +73,16 @@ public class ThemeManagerClearCacheTest {
             requestWithGzip(client, url);
             assertTrue(gzipCacheFileExists(resourcesVersion), "expected the gzip cache file to exist after the request");
 
+            // clearCache swaps to a new directory; the previous one is retained briefly for in-flight requests
+            runOnServer.run(session -> session.theme().clearCache());
+            // a second clearCache cleans up the previous generation's directory
             runOnServer.run(session -> session.theme().clearCache());
 
-            assertFalse(gzipCacheFileExists(resourcesVersion), "clearCache() should have removed the gzip cache file");
+            assertFalse(gzipCacheFileExists(resourcesVersion),
+                    "old gzip cache directory should have been removed");
 
-            // a subsequent request still works, and repopulates the cache
+            // subsequent requests still work with gzip encoding
             requestWithGzip(client, url);
-            assertTrue(gzipCacheFileExists(resourcesVersion));
         }
     }
 

@@ -23,7 +23,8 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
 
     private Set<String> excludedContentTypes = new HashSet<>();
 
-    private File cacheDir;
+    private volatile File cacheDir;
+    private volatile File previousCacheDir;
 
     @Override
     public ResourceEncodingProvider create(KeycloakSession session) {
@@ -52,17 +53,26 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
 
     @Override
     public void clearCache() {
-        File dir = cacheDir;
-        if (dir == null) {
-            // not yet initialized by a create() call, but a cache directory from a previous run might still exist
-            dir = new File(new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache"), Version.RESOURCES_VERSION);
-        }
-        if (dir.isDirectory()) {
+        File prev = previousCacheDir;
+        if (prev != null) {
             try {
-                FileUtils.cleanDirectory(dir);
+                FileUtils.deleteDirectory(prev);
             } catch (IOException e) {
-                logger.warn("Failed to clear gzip cache directory", e);
+                logger.warn("Failed to delete previous gzip cache directory", e);
             }
+        }
+
+        // current dir becomes previous — in-flight providers may still write to it
+        previousCacheDir = cacheDir;
+
+        File cacheRoot = new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache");
+        File newDir = new File(cacheRoot, Version.RESOURCES_VERSION + "-" + System.nanoTime());
+        newDir.mkdirs();
+        if (newDir.isDirectory()) {
+            cacheDir = newDir;
+        } else {
+            logger.warn("Failed to create gzip cache directory " + newDir.getAbsolutePath());
+            cacheDir = null;
         }
     }
 
@@ -84,11 +94,12 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
         }
 
         File cacheRoot = new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache");
-        File cacheDir = new File(cacheRoot, Version.RESOURCES_VERSION);
 
+        // clean up all directories from previous runs or clearCache() generations (#52802)
         if (cacheRoot.isDirectory()) {
-            for (File f : cacheRoot.listFiles()) {
-                if (!f.getName().equals(Version.RESOURCES_VERSION)) {
+            File[] files = cacheRoot.listFiles();
+            if (files != null) {
+                for (File f : files) {
                     try {
                         FileUtils.deleteDirectory(f);
                     } catch (IOException e) {
@@ -98,6 +109,7 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
             }
         }
 
+        File cacheDir = new File(cacheRoot, Version.RESOURCES_VERSION);
         cacheDir.mkdirs();
         if (!cacheDir.isDirectory()) {
             logger.warn("Failed to create gzip cache directory " + cacheDir.getAbsolutePath());

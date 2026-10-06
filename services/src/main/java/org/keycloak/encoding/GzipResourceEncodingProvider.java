@@ -2,7 +2,6 @@ package org.keycloak.encoding;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,26 +32,11 @@ public class GzipResourceEncodingProvider implements ResourceEncodingProvider {
                 return null;
             }
 
-            // retry once: a concurrent clearCache() might remove or disrupt the file between the exists() check
-            // below and opening the stream, or while it is being (re-)created
-            for (int attempt = 0; attempt < 2; attempt++) {
-                File file;
-                try {
-                    file = encodedFile.exists() ? encodedFile : createEncodedFile(producer, encodedFile);
-                } catch (IOException e) {
-                    logger.debugf("Failed to create encoded resource %s concurrently, retrying", encodedFile);
-                    continue;
-                }
-                if (file == null) {
-                    return null;
-                }
-                try {
-                    return new FileInputStream(file);
-                } catch (FileNotFoundException e) {
-                    logger.debugf("Encoded resource %s was removed concurrently, retrying", file);
-                }
+            if (!encodedFile.exists()) {
+                encodedFile = createEncodedFile(producer, encodedFile);
             }
-            return null;
+
+            return encodedFile != null ? new FileInputStream(encodedFile) : null;
         } catch (Exception e) {
             logger.warn("Failed to encode resource", e);
             return null;
