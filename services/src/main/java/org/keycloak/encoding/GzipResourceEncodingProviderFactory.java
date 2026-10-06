@@ -9,6 +9,7 @@ import java.util.Set;
 
 import org.keycloak.Config;
 import org.keycloak.common.Version;
+import org.keycloak.common.util.Time;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
@@ -55,25 +56,12 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
     public void clearCache() {
         File prev = previousCacheDir;
         if (prev != null) {
-            try {
-                FileUtils.deleteDirectory(prev);
-            } catch (IOException e) {
-                logger.warn("Failed to delete previous gzip cache directory", e);
-            }
+            deleteDirectoryQuietly(prev);
         }
 
         // current dir becomes previous — in-flight providers may still write to it
         previousCacheDir = cacheDir;
-
-        File cacheRoot = new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache");
-        File newDir = new File(cacheRoot, Version.RESOURCES_VERSION + "-" + System.nanoTime());
-        newDir.mkdirs();
-        if (newDir.isDirectory()) {
-            cacheDir = newDir;
-        } else {
-            logger.warn("Failed to create gzip cache directory " + newDir.getAbsolutePath());
-            cacheDir = null;
-        }
+        cacheDir = createCacheDir();
     }
 
     @Override
@@ -93,29 +81,39 @@ public class GzipResourceEncodingProviderFactory implements ResourceEncodingProv
             return cacheDir;
         }
 
-        File cacheRoot = new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache");
-
-        // clean up all directories from previous runs or clearCache() generations (#52802)
+        // clean up all directories from previous runs or clearCache() generations
+        File cacheRoot = cacheRoot();
         if (cacheRoot.isDirectory()) {
             File[] files = cacheRoot.listFiles();
             if (files != null) {
                 for (File f : files) {
-                    try {
-                        FileUtils.deleteDirectory(f);
-                    } catch (IOException e) {
-                        logger.warn("Failed to delete old gzip cache directory", e);
-                    }
+                    deleteDirectoryQuietly(f);
                 }
             }
         }
 
-        File cacheDir = new File(cacheRoot, Version.RESOURCES_VERSION);
-        cacheDir.mkdirs();
-        if (!cacheDir.isDirectory()) {
-            logger.warn("Failed to create gzip cache directory " + cacheDir.getAbsolutePath());
+        return createCacheDir();
+    }
+
+    private File cacheRoot() {
+        return new File(KeycloakApplication.getTmpDirectory(), "kc-gzip-cache");
+    }
+
+    private File createCacheDir() {
+        File dir = new File(cacheRoot(), Version.RESOURCES_VERSION + "-" + Time.currentTimeMillis());
+        dir.mkdirs();
+        if (!dir.isDirectory()) {
+            logger.warn("Failed to create gzip cache directory " + dir.getAbsolutePath());
             return null;
         }
+        return dir;
+    }
 
-        return cacheDir;
+    private void deleteDirectoryQuietly(File dir) {
+        try {
+            FileUtils.deleteDirectory(dir);
+        } catch (IOException e) {
+            logger.warn("Failed to delete gzip cache directory", e);
+        }
     }
 }
